@@ -35,17 +35,41 @@ WalkSim 2.0은 학교 실습용 인터랙티브 웹 시뮬레이션 플랫폼입
 
 ## 3. 클로드가 이어서 해야 할 다음 작업 (Next Steps)
 
-현재 워크플로우(캡처 -> 에디터 전달 -> 플레이어)의 뼈대는 뚫려 있으나, **데이터의 영구 보존 및 고도화**가 필요합니다.
+> 2026-09-26 Claude 개정 이후의 상태. 자세한 내용은 §5 참고.
 
-1. **에디터 IndexedDB 연동 (우선순위 높음)** — ✅ 완료 (Claude):
-   - `packages/editor/src/storage/db.ts`: `idb` 기반 DB `walksim-editor` (`projects`, `assets`(Blob, `by-project` 인덱스), `meta`).
-   - `packages/editor/src/storage/useProject.ts`: 시작 시 마지막 프로젝트 복원, 편집 내용 디바운스 저장, 캡처는 이미지+Manifest를 단일 트랜잭션으로 즉시 저장, "새 프로젝트" 시 로컬 데이터 완전 삭제.
-   - 현재 에디터는 새로고침 시 메모리에 있는 캡처본(Data URL)과 Step들이 날아갑니다. `idb` 또는 `localforage` 라이브러리를 사용해 수신된 Manifest 객체와 캡처된 이미지들을 브라우저 내장 IndexedDB에 영구 저장하도록 수정해 주세요.
-2. **불투명 마스킹 UI 구현**:
-   - 에디터의 화면 미리보기 영역에서 마우스로 영역을 드래그하여 불투명한 색상(개인정보 가림용) 박스를 덧씌우는 기능이 필요합니다.
-3. **에디터 ↔ 공유 패키지 연동 강화**:
-   - 편집기 상단 메뉴의 "안전 확인", "ZIP 내보내기" 버튼 로직을 구현하여 실제 `@walksim/player` 기반의 배포용 압축 파일이 완성되도록 마무리해야 합니다. (이때 이미지는 `jpeg`를 `webp`로 변환하여 압축하는 로직 추가)
+1. **에디터 IndexedDB 연동** — ✅ 완료. 단, 최초 구현(원본 캡처 저장)은 PRD 결정 5·SEC-02 위반이라 **마스킹 완료 이미지만 저장**하도록 재작성함(DB v2가 v1 원본 자산을 폐기).
+2. **불투명 마스킹 UI** — ✅ 완료. 검수함(메모리 전용) + 드래그 가림 상자 + 레코더 자동 후보 + 승인 시 픽셀에 굽기(WebP).
+3. **"안전 확인" / "ZIP 내보내기"** — 안전 확인(구조 검사 + 미승인 검수함 차단)은 ✅, **ZIP 내보내기는 ⏳ 남음**:
+   - PRD §12.2 불변조건대로 `exportPublicSimulation` 구현: 검사 통과 시에만 `player dist + play/<id>/index.html + manifest.json + assets/<hash>.webp` ZIP 생성.
+   - 이미지는 이미 WebP·해시 파일명(`manifest.assets[id] = "assets/img-<hash>.webp"`)으로 저장되므로 변환 없이 그대로 담으면 됨. ZIP 안에서는 `../../assets/...`로 경로를 다시 써야 함(매니페스트가 `play/<id>/`에 위치).
+   - 단계별 "안전 확인" 체크(수정 시 자동 해제)와 교사 최종 승인 게이트, 알려진 테스트 비밀값 스캔.
+4. 이후 후보: 프로젝트 JSON/ZIP 백업·불러오기(PRD P0, 확장 삭제 시 데이터 소실 대비), input/choice 단계 편집 UI, Playwright 테스트를 저장소에 정식 추가(QA-01).
 
 ## 4. 작업 시 주의사항 (Rules)
-- **보안 최우선**: 개인정보 보호가 가장 중요합니다. 캡처된 원본 이미지는 절대 디스크 외부로 전송되면 안 됩니다.
-- **포맷 제약**: 크롬 확장 API의 제약으로 임시로 `jpeg` 캡처를 사용 중입니다. 에디터에서 ZIP 내보내기를 할 때 `canvas.toBlob('image/webp')`을 통해 webp 변환을 적용해 주세요.
+- **보안 최우선**: 개인정보 보호가 가장 중요합니다. 마스킹 전 원본 캡처는 **메모리(검수함)에만** 존재해야 하며 IndexedDB·localStorage·ZIP·로그·네트워크 어디에도 쓰면 안 됩니다.
+- **포맷**: 레코더는 `jpeg`(품질 92)로 캡처하고, 에디터가 승인 시 마스킹을 구운 뒤 `canvas.toBlob('image/webp')`로 인코딩합니다(미지원 시 PNG).
+- 원본 캡처는 WalkSim 에디터(확장 내부 페이지 또는 `<meta name="walksim-editor">`가 있는 개발용 localhost 페이지)에만 전달합니다.
+
+## 5. 2026-09-26 Claude 검토·개정 요약
+
+**판단**: 전체 아키텍처(정적 플레이어 + 로컬 에디터 + MV3 레코더 + IndexedDB)는 PRD·Arcade 방식 모두에 맞음. 아래 문제를 수정함.
+
+| 문제 | 조치 |
+|---|---|
+| 원본 캡처가 IndexedDB에 저장됨(PRD 위반) | 검수함(메모리) → 가림 → 승인 시 마스킹된 WebP만 저장. DB v2 업그레이드가 v1 원본 삭제 |
+| 클릭 **후** 비동기 캡처 → 결과 화면이 찍힘 | DOM 안정(400ms, 최대 2s) 시 미리 찍은 "클릭 직전 프레임" 사용. 비활성 탭은 활성화 시 보충 캡처 |
+| 핫스팟이 `<span>` 등 내부 요소 크기로 잡힘 | 가장 가까운 버튼·링크·role 요소로 보정 |
+| 캡처를 **아무 localhost 탭**에 `postMessage('*')`로 전송 | 확장 내부 에디터(chrome.runtime) 또는 표시된 개발용 에디터에만 전달 |
+| 교사가 `npm run dev`를 띄워야 함 | 에디터를 확장 프로그램에 포함(`npm run build:extension`) |
+| 페이지 이동 시 녹화 중단, 재시작 시 리스너 중복 | 이동 후 자동 재주입, 중복 방지, 상태는 `storage.session` |
+| 에디터 미리보기 `aspect-video` 고정 → 핫스팟 어긋남 | 이미지 실제 비율로 오버레이 |
+| 플레이어가 `manifest.viewport`로 비율 계산 → 실제 캡처 해상도와 불일치 | 이미지 natural size + ResizeObserver |
+| 플레이어 매니페스트 경로 하드코딩, `alert()` 오답 처리 | `?lesson=`/`play/<id>/`, 매니페스트 기준 상대 경로, Arcade식 비콘·말풍선·오답 피드백·힌트·안내/연습/평가 모드 |
+| shared가 CommonJS 빌드 필요 | TS 소스 직접 사용(빌드 단계 제거), 자산 경로 상대경로 강제, 그래프 검증 추가 |
+
+**재현 절차**
+- 교사용: `npm install && npm run build:extension` → `chrome://extensions` → 개발자 모드 → "압축해제된 확장 프로그램 로드" → `packages/recorder/dist`. 녹화할 탭에서 아이콘 → 더미 자료 확인 체크 → 녹화 시작 → 클릭 → 녹화 중지 → 자동으로 열린 에디터 검수함에서 가림·승인.
+- 개발용 에디터: `npm run dev:editor` (확장 설치 상태에서 localhost 에디터로도 캡처 수신).
+- 플레이어: `npm run dev:player` → `/?lesson=sample-drive&mode=guide`.
+
+**테스트 결과(Playwright + Chromium, 수동 스크립트)**: 에디터(원본 미저장, 픽셀 마스킹 검증, 해시 중복 제거, 삭제 시 재연결·고아 자산 정리, v1→v2 원본 폐기, 다중 탭 잠금), 확장 E2E(클릭 직전 프레임, 버튼 스냅, 민감 후보 2곳 탐지, 페이지 이동 후 재주입, 종료 화면, 확장 내부 에디터 저장·복원), 플레이어(연습 모드 전 경로, 모바일 핫스팟 정합, 비-GET/외부 요청 0건) 모두 통과. 확장 E2E는 Playwright가 아이콘 클릭을 못 하므로 `activeTab` 대신 테스트용 host 권한으로 실행함.
