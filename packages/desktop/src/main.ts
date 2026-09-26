@@ -122,38 +122,68 @@ async function ensurePermissions(): Promise<string | null> {
 }
 
 // ---------- 녹화 영역 선택 ----------
-function selectRegion(display: Display): Promise<RectDip | null> {
+// 모니터마다 선택 화면을 띄우고, 교사가 드래그한(또는 '전체 화면'을 누른) 모니터를 녹화한다.
+function selectRegion(): Promise<{ display: Display; region: RectDip } | null> {
   return new Promise(resolve => {
-    const b = display.bounds;
-    const overlay = new BrowserWindow({
-      x: b.x, y: b.y, width: b.width, height: b.height,
-      frame: false, transparent: true, alwaysOnTop: true, resizable: false, movable: false, skipTaskbar: true, hasShadow: false,
-      webPreferences: { preload: path.join(__dirname, 'preload-ui.js'), contextIsolation: true, sandbox: true },
+    const displays = screen.getAllDisplays();
+    const cursorDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const overlays = displays.map((display, i) => {
+      const b = display.bounds;
+      const win = new BrowserWindow({
+        x: b.x, y: b.y, width: b.width, height: b.height,
+        frame: false, transparent: true, alwaysOnTop: true, resizable: false, movable: false, skipTaskbar: true, hasShadow: false,
+        webPreferences: { preload: path.join(__dirname, 'preload-ui.js'), contextIsolation: true, sandbox: true },
+      });
+      win.setAlwaysOnTop(true, 'screen-saver');
+      win.setBounds(b); // 일부 환경에서 창이 다른 모니터로 밀리는 것을 막는다
+      lockDown(win, pathToFileURL(UI_DIR).toString());
+      void win.loadFile(path.join(UI_DIR, 'overlay.html'), {
+        query: { monitor: String(i + 1), total: String(displays.length), current: display.id === cursorDisplay.id ? '1' : '0' },
+      });
+      return { display, win };
     });
-    overlay.setAlwaysOnTop(true, 'screen-saver');
-    lockDown(overlay, pathToFileURL(UI_DIR).toString());
+
     let done = false;
-    const finish = (r: RectDip | null) => {
+    const finish = (result: { display: Display; region: RectDip } | null) => {
       if (done) return;
       done = true;
       ipcMain.removeHandler('overlay:done');
-      if (!overlay.isDestroyed()) overlay.close();
-      resolve(r);
+      for (const o of overlays) if (!o.win.isDestroyed()) o.win.close();
+      resolve(result);
     };
     ipcMain.handle('overlay:done', (e, r: RectDip | null) => {
-      if (e.sender !== overlay.webContents) return;
-      finish(r && r.width >= 40 && r.height >= 40 ? { x: b.x + r.x, y: b.y + r.y, width: r.width, height: r.height } : null);
+      const o = overlays.find(x => x.win.webContents === e.sender);
+      if (!o) return;
+      const b = o.display.bounds;
+      finish(r && r.width >= 40 && r.height >= 40
+        ? { display: o.display, region: { x: b.x + r.x, y: b.y + r.y, width: r.width, height: r.height } }
+        : null);
     });
-    overlay.on('closed', () => finish(null));
-    void overlay.loadFile(path.join(UI_DIR, 'overlay.html'));
+    for (const o of overlays) o.win.on('closed', () => finish(null));
   });
 }
 
 // ---------- 화면 스트림(캡처 창) ----------
-async function startCapture(display: Display, region: RectDip): Promise<BrowserWindow> {
+// 모니터별 화면 소스를 고른다. 소스가 모니터 구분 없이 하나(가상 데스크톱 전체)뿐인 환경이면 전체 영역 기준으로 잘라 낸다.
+async function sourceFor(display: Display): Promise<{ id: string; bounds: RectDip; scale: number }> {
   const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
-  const source = sources.find(s => s.display_id === String(display.id)) ?? sources[0];
-  if (!source) throw new Error('캡처할 화면을 찾지 못했습니다.');
+  if (sources.length === 0) throw new Error('캡처할 화면을 찾지 못했습니다.');
+  const matched = sources.find(s => s.display_id === String(display.id));
+  if (matched) return { id: matched.id, bounds: display.bounds, scale: display.scaleFactor };
+  const displays = screen.getAllDisplays();
+  if (sources.length === displays.length) {
+    const i = displays.findIndex(d => d.id === display.id);
+    return { id: sources[Math.max(0, i)].id, bounds: display.bounds, scale: display.scaleFactor };
+  }
+  const x = Math.min(...displays.map(d => d.bounds.x));
+  const y = Math.min(...displays.map(d => d.bounds.y));
+  const right = Math.max(...displays.map(d => d.bounds.x + d.bounds.width));
+  const bottom = Math.max(...displays.map(d => d.bounds.y + d.bounds.height));
+  return { id: sources[0].id, bounds: { x, y, width: right - x, height: bottom - y }, scale: display.scaleFactor };
+}
+
+async function startCapture(display: Display, region: RectDip): Promise<BrowserWindow> {
+  const source = await sourceFor(display);
   const win = new BrowserWindow({
     show: false,
     webPreferences: { preload: path.join(__dirname, 'preload-ui.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false },
@@ -162,12 +192,10 @@ async function startCapture(display: Display, region: RectDip): Promise<BrowserW
   mediaAllowed.add(win.webContents.id);
   win.on('closed', () => mediaAllowed.clear());
   await win.loadFile(path.join(UI_DIR, 'capture.html'));
-  const ok: boolean = await win.webContents.executeJavaScript('true'); // 로드 확인
-  if (!ok) throw new Error('캡처 창을 열지 못했습니다.');
   const res = await invokeRenderer<{ ok: boolean; error?: string }>(win, 'cap:start', {
     sourceId: source.id,
-    display: display.bounds,
-    scale: display.scaleFactor,
+    display: source.bounds,
+    scale: source.scale,
     region,
   });
   if (!res.ok) throw new Error(res.error ?? '화면 스트림을 시작하지 못했습니다.');
@@ -342,13 +370,13 @@ async function startRecording(): Promise<{ ok: boolean; error?: string }> {
   const permissionError = await ensurePermissions();
   if (permissionError) return { ok: false, error: permissionError };
 
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   editorWin?.minimize();
-  const region = await selectRegion(display);
-  if (!region) {
+  const selection = await selectRegion();
+  if (!selection) {
     editorWin?.restore();
     return { ok: false, error: '녹화를 취소했습니다.' };
   }
+  const { display, region } = selection;
 
   let capture: BrowserWindow | null = null;
   try {

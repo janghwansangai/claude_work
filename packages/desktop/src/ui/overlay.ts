@@ -7,6 +7,19 @@ const ready = $<HTMLInputElement>('ready');
 const go = $<HTMLButtonElement>('go');
 const full = $<HTMLButtonElement>('full');
 
+// 모니터가 여러 대면 각 모니터에 이 화면이 뜬다. 녹화할 모니터에서 드래그하면 된다.
+const params = new URLSearchParams(location.search);
+const total = Number(params.get('total') ?? '1');
+if (total > 1) {
+  const badge = $('badge');
+  badge.hidden = false;
+  badge.textContent = `모니터 ${params.get('monitor')} / ${total}`;
+  const multi = $('multi');
+  multi.hidden = false;
+  multi.textContent = `모니터가 ${total}대입니다. 녹화할 프로그램이 있는 모니터 화면에서 영역을 드래그하거나 '전체 화면 녹화'를 누르세요.`;
+  if (params.get('current') !== '1') card.style.top = '96px';
+}
+
 let start: { x: number; y: number } | null = null;
 let region: { x: number; y: number; width: number; height: number } | null = null;
 

@@ -15,12 +15,15 @@
   button:disabled { opacity: .4; cursor: not-allowed; }
   .primary { background: #2563eb; color: #fff; }
   .ghost { background: #f3f4f6; color: #374151; }
+  #badge { position: fixed; left: 24px; top: 24px; background: #2563eb; color: #fff; font-size: 22px; font-weight: 800; border-radius: 12px; padding: 10px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.3); z-index: 2; cursor: default; }
   #actions { position: fixed; display: none; gap: 8px; z-index: 2; cursor: default; }
 </style></head>
 <body>
   <div id="sel"></div>
+  <div id="badge" hidden></div>
   <div id="card">
     <h1>녹화할 영역을 마우스로 드래그하세요</h1>
+    <p id="multi" hidden></p>
     <p>실습할 프로그램 창 부분만 선택하면 작업표시줄·알림·다른 창이 찍히지 않습니다. 윈도우 시작 메뉴·작업표시줄을 가르칠 때는 ‘전체 화면’을 고르세요.</p>
     <div class="warn">⚠️ 실제 학생 명단·계정·메신저가 보이지 않게 준비하고, 방해 금지 모드(알림 끄기)를 켜 주세요. 입력한 글자 내용은 기록하지 않습니다.</div>
     <label><input type="checkbox" id="ready"> 더미 계정·가상 자료로 준비했고, 알림을 껐습니다.</label>
