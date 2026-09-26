@@ -66,8 +66,10 @@ function App() {
       await project.addApprovedCapture({
         image,
         rect: inboxItem.rect,
+        action: inboxItem.action,
         instruction: inboxItem.instruction,
         viewport: inboxItem.viewport,
+        placeholder: inboxItem.target?.label,
       });
     } catch (err) {
       console.error(err);
@@ -244,7 +246,7 @@ function App() {
               index={stepIndex}
               image={images[selectedStep.assetId]}
               onUpdate={updateSelectedStep}
-              onSetHotspot={rect => project.setHotspot(selectedStep.id, rect)}
+              onSetRect={(role, rect) => project.setStepRect(selectedStep.id, role, rect)}
               onApplyMasks={masks => project.addMasksToStep(selectedStep.id, masks)}
               onDelete={() => {
                 if (window.confirm('이 단계를 삭제할까요? 앞뒤 단계는 자동으로 이어집니다.')) void project.deleteStep(selectedStep.id);

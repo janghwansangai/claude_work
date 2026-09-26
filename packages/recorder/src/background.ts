@@ -9,7 +9,10 @@ const EDITOR_URL = chrome.runtime.getURL(EDITOR_PATH);
 interface Frame { tabId: number; seq: number; image: string; viewport: Viewport; suggestedMasks: Rect[] }
 interface SessionState { recordingTabId?: number; devEditorTabId?: number }
 
-let frame: Frame | null = null;
+// 최근 안정 화면 몇 장을 번호(seq)별로 보관한다. 더블클릭·입력처럼 동작 판별이 조금 늦게 끝나도 "직전 화면"을 쓸 수 있다.
+const MAX_FRAMES = 6;
+let frames: Frame[] = [];
+const latestFrame = (tabId: number) => [...frames].reverse().find(f => f.tabId === tabId) ?? null;
 // 탭이 비활성이라 찍지 못한 "안정 화면". 탭이 다시 활성화되면 그때 찍는다.
 let missedSettle: { tabId: number; msg: PageSettledMessage } | null = null;
 let captureChain: Promise<unknown> = Promise.resolve();
@@ -109,7 +112,7 @@ async function startRecording(tabId: number): Promise<{ ok: boolean; error?: str
     return { ok: false, error: `이 페이지에는 녹화기를 넣을 수 없습니다. (${(err as Error).message})` };
   }
   await chrome.storage.session.set({ recordingTabId: tabId });
-  frame = null;
+  frames = [];
   setBadge(tabId, 'REC');
   await openEditor(false);
   return { ok: true };
@@ -123,18 +126,18 @@ async function stopRecording() {
   chrome.tabs.sendMessage(recordingTabId, { action: 'STOP_CONTENT' }).catch(() => {});
 
   // 마지막 동작의 결과 화면을 종료 단계로 보낸다.
-  const image = await captureTab(recordingTabId) ?? (frame?.tabId === recordingTabId ? frame.image : null);
-  const last = frame;
-  frame = null;
+  const last = latestFrame(recordingTabId);
+  const image = await captureTab(recordingTabId) ?? last?.image ?? null;
+  frames = [];
   if (image && last) {
-    await deliver({ image, rect: null, viewport: last.viewport, target: null, suggestedMasks: last.suggestedMasks, timestamp: Date.now() });
+    await deliver({ image, rect: null, viewport: last.viewport, target: null, suggestedMasks: last.suggestedMasks, action: null, timestamp: Date.now() });
   }
 }
 
 async function onPageSettled(tabId: number, msg: PageSettledMessage) {
   const image = await captureTab(tabId);
   if (image) {
-    frame = { tabId, seq: msg.seq, image, viewport: msg.viewport, suggestedMasks: msg.suggestedMasks };
+    frames = [...frames.filter(f => !(f.tabId === tabId && f.seq === msg.seq)), { tabId, seq: msg.seq, image, viewport: msg.viewport, suggestedMasks: msg.suggestedMasks }].slice(-MAX_FRAMES);
     missedSettle = null;
   } else {
     missedSettle = { tabId, msg };
@@ -142,8 +145,8 @@ async function onPageSettled(tabId: number, msg: PageSettledMessage) {
 }
 
 async function onUserAction(tabId: number, msg: UserActionMessage) {
-  // 클릭 직전의 "안정된 화면"을 쓴다. 없거나 낡았으면(화면이 바뀌는 중이었으면) 지금 즉시 찍는다.
-  const fresh = frame && frame.tabId === tabId && msg.frameSeq !== null && frame.seq === msg.frameSeq ? frame : null;
+  // 동작 직전의 "안정된 화면"을 쓴다. 없거나 낡았으면(화면이 바뀌는 중이었으면) 지금 즉시 찍는다.
+  const fresh = msg.frameSeq === null ? null : frames.find(f => f.tabId === tabId && f.seq === msg.frameSeq) ?? null;
   const image = fresh?.image ?? await captureTab(tabId);
   if (!image) return;
   await deliver({
@@ -152,6 +155,7 @@ async function onUserAction(tabId: number, msg: UserActionMessage) {
     viewport: msg.viewport,
     target: msg.target,
     suggestedMasks: fresh?.suggestedMasks ?? msg.suggestedMasks,
+    action: msg.recorded,
     timestamp: Date.now(),
   });
 }
@@ -197,7 +201,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   const { recordingTabId } = await getState();
   if (tabId !== recordingTabId) return;
   if (info.status === 'loading') {
-    if (frame?.tabId === tabId) frame = null;
+    frames = frames.filter(f => f.tabId !== tabId);
     if (missedSettle?.tabId === tabId) missedSettle = null;
   }
   if (info.status === 'complete') {
@@ -218,6 +222,6 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
 
 chrome.tabs.onRemoved.addListener(async tabId => {
   const { recordingTabId, devEditorTabId } = await getState();
-  if (tabId === recordingTabId) { await chrome.storage.session.remove('recordingTabId'); frame = null; }
+  if (tabId === recordingTabId) { await chrome.storage.session.remove('recordingTabId'); frames = []; }
   if (tabId === devEditorTabId) await chrome.storage.session.remove('devEditorTabId');
 });

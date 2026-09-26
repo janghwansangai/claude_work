@@ -5,7 +5,9 @@ import {
   createInitialManifest,
   deleteStep as removeStep,
   replaceStepAsset,
-  setHotspotRect,
+  setStepRect as applyStepRect,
+  type RectRole,
+  type RecordedAction,
   type Viewport,
 } from '../project';
 import { burnMasks, extensionForMime, type EncodedImage } from '../imaging';
@@ -31,8 +33,10 @@ const SAVE_DEBOUNCE_MS = 400;
 export interface ApprovedCapture {
   image: EncodedImage;
   rect: Rect | null;
+  action: RecordedAction | null;
   instruction: string;
   viewport: Viewport | null;
+  placeholder?: string;
 }
 
 // 에디터의 Manifest/승인된 이미지 상태를 소유하고 IndexedDB와 동기화한다.
@@ -178,8 +182,10 @@ export function useProject() {
       assetId,
       assetPath: path,
       rect: capture.rect,
+      action: capture.action,
       instruction: capture.instruction,
       viewport: capture.viewport,
+      placeholder: capture.placeholder,
     });
     setManifest(next);
     setSelectedStepId(step.id);
@@ -197,8 +203,8 @@ export function useProject() {
     await persist([record]);
   }, [persist, setManifest, toAssetRecord]);
 
-  const setHotspot = useCallback((stepId: string, rect: Rect) => {
-    setManifest(setHotspotRect(manifestRef.current, stepId, rect));
+  const setStepRect = useCallback((stepId: string, role: RectRole, rect: Rect | undefined) => {
+    setManifest(applyStepRect(manifestRef.current, stepId, role, rect));
   }, [setManifest]);
 
   const deleteStep = useCallback(async (stepId: string) => {
@@ -241,7 +247,7 @@ export function useProject() {
     updateManifest,
     addApprovedCapture,
     addMasksToStep,
-    setHotspot,
+    setStepRect,
     deleteStep,
     resetProject,
   };

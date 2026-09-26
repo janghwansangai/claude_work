@@ -2,15 +2,25 @@ import { useState } from 'react';
 import type { InboxItem } from '../inbox/useInbox';
 import { RectCanvas, type DrawTool } from './RectCanvas';
 import { ToolToggle } from './ToolToggle';
+import { captureShapes, captureTools } from './shapes';
+import { STEP_KIND_LABEL } from '../project';
 
 interface Props {
   item: InboxItem;
   position: number;
   total: number;
   busy: boolean;
-  onChange: (patch: Partial<Pick<InboxItem, 'masks' | 'instruction' | 'rect'>>) => void;
+  onChange: (patch: Partial<Pick<InboxItem, 'masks' | 'instruction' | 'rect' | 'action'>>) => void;
   onApprove: () => void;
   onDiscard: () => void;
+}
+
+function recordedLabel(item: InboxItem): string {
+  const a = item.action;
+  if (a?.kind === 'key') return `${STEP_KIND_LABEL.key} ${a.keys}`;
+  if (!item.rect) return STEP_KIND_LABEL.end;
+  if (a?.kind === 'type') return a.inputType === 'password' ? '비밀번호 입력(연습용 비밀번호로 대체)' : STEP_KIND_LABEL.input;
+  return STEP_KIND_LABEL[a?.kind === 'double' || a?.kind === 'right' || a?.kind === 'drag' ? a.kind : 'click'];
 }
 
 // 원본 캡처를 교사가 검수·가림 처리하는 화면. 승인해야만 마스킹이 구워진 이미지가 저장된다.
@@ -28,7 +38,7 @@ export function InboxReview({ item, position, total, busy, onChange, onApprove, 
             이 원본은 이 탭의 메모리에만 있습니다. 승인하면 가림 상자가 픽셀에 구워진 이미지만 저장되고, 버리면 즉시 사라집니다.
           </p>
         </div>
-        <ToolToggle tool={tool} onChange={setTool} maskLabel="가림 상자 그리기" />
+        <ToolToggle tool={tool} onChange={setTool} options={captureTools(item.rect, item.action)} />
       </div>
 
       {item.suggestedCount > 0 && (
@@ -41,14 +51,21 @@ export function InboxReview({ item, position, total, busy, onChange, onApprove, 
       <RectCanvas
         src={item.url}
         masks={item.masks}
-        hotspot={item.rect}
+        shapes={captureShapes(item.rect, item.action)}
         tool={tool}
-        onDraw={rect => (tool === 'mask' ? onChange({ masks: [...item.masks, rect] }) : onChange({ rect }))}
+        onDraw={rect => {
+          if (tool === 'mask') onChange({ masks: [...item.masks, rect] });
+          else if (tool === 'target' && item.action) onChange({ action: { ...item.action, to: rect } });
+          else onChange({ rect });
+        }}
         onRemoveMask={i => onChange({ masks: item.masks.filter((_, j) => j !== i) })}
       />
       <p className="text-xs text-gray-500 -mt-3">
         가림 상자 {item.masks.length}개 · 가림 상자에 마우스를 올리면 × 버튼으로 해제할 수 있습니다.
-        {item.rect ? ' 파란 상자는 학생이 클릭할 영역입니다.' : ' 녹화 마지막 화면(종료 단계)입니다.'}
+        {' 기록된 동작: '}
+        <b>{recordedLabel(item)}</b>
+        {item.rect ? '' : item.action?.kind === 'key' ? '' : ' (녹화 마지막 화면 → 종료 단계)'}
+        {' — 승인 후 단계 편집에서 동작 종류를 바꿀 수 있습니다.'}
       </p>
 
       <label className="block">

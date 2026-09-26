@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Rect } from '@walksim/shared';
 import { dataUrlToBlob } from '../imaging';
-import { draftInstruction, newId, type CapturePayload, type CaptureTarget, type Viewport } from '../project';
+import { draftInstruction, newId, type CapturePayload, type CaptureTarget, type RecordedAction, type Viewport } from '../project';
 
 // 검수함(review inbox): 마스킹 전 원본 캡처는 여기, 즉 탭 메모리에만 존재한다(PRD §5 P0, §7.2).
 // IndexedDB·localStorage·네트워크 어디에도 쓰지 않으며 새로고침하면 사라진다.
@@ -12,6 +12,7 @@ export interface InboxItem {
   rect: Rect | null;
   viewport: Viewport | null;
   target: CaptureTarget | null;
+  action: RecordedAction | null;
   masks: Rect[];
   suggestedCount: number;
   instruction: string;
@@ -36,6 +37,7 @@ export function useInbox() {
       rect: payload.rect,
       viewport: payload.viewport,
       target: payload.target,
+      action: payload.action,
       // 레코더가 찾은 민감정보 후보는 기본으로 가림 처리된 상태로 시작한다(교사가 해제 가능).
       masks: payload.suggestedMasks,
       suggestedCount: payload.suggestedMasks.length,
@@ -46,7 +48,7 @@ export function useInbox() {
     return item;
   }, [commit]);
 
-  const update = useCallback((id: string, patch: Partial<Pick<InboxItem, 'masks' | 'instruction' | 'rect'>>) => {
+  const update = useCallback((id: string, patch: Partial<Pick<InboxItem, 'masks' | 'instruction' | 'rect' | 'action'>>) => {
     commit(itemsRef.current.map(item => (item.id === id ? { ...item, ...patch } : item)));
   }, [commit]);
 
