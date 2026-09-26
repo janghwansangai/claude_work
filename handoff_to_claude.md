@@ -39,10 +39,10 @@ WalkSim 2.0은 학교 실습용 인터랙티브 웹 시뮬레이션 플랫폼입
 
 1. **에디터 IndexedDB 연동** — ✅ 완료. 단, 최초 구현(원본 캡처 저장)은 PRD 결정 5·SEC-02 위반이라 **마스킹 완료 이미지만 저장**하도록 재작성함(DB v2가 v1 원본 자산을 폐기).
 2. **불투명 마스킹 UI** — ✅ 완료. 검수함(메모리 전용) + 드래그 가림 상자 + 레코더 자동 후보 + 승인 시 픽셀에 굽기(WebP).
-3. **"안전 확인" / "ZIP 내보내기"** — 안전 확인(구조 검사 + 미승인 검수함 차단)은 ✅, **ZIP 내보내기는 ⏳ 남음**:
-   - PRD §12.2 불변조건대로 `exportPublicSimulation` 구현: 검사 통과 시에만 `player dist + play/<id>/index.html + manifest.json + assets/<hash>.webp` ZIP 생성.
-   - 이미지는 이미 WebP·해시 파일명(`manifest.assets[id] = "assets/img-<hash>.webp"`)으로 저장되므로 변환 없이 그대로 담으면 됨. ZIP 안에서는 `../../assets/...`로 경로를 다시 써야 함(매니페스트가 `play/<id>/`에 위치).
-   - 단계별 "안전 확인" 체크(수정 시 자동 해제)와 교사 최종 승인 게이트, 알려진 테스트 비밀값 스캔.
+3. **"안전 확인" / "ZIP 내보내기"** — ✅ 완료. `packages/editor/src/export/exportZip.ts`
+   - 차단 조건: 미승인 검수함, 이미지 없는 단계, 그래프 오류, 학생에게 보이는 텍스트 속 이메일·전화·주민번호·카드번호 형태. 통과 후 교사 최종 확인 체크 필수.
+   - ZIP 구조: `index.html`(→ `play/<id>/` 이동) · `play/<id>/index.html` · `play/<id>/manifest.json`(자산 경로 `../../assets/…`) · `assets/img-<hash>.webp` · 플레이어 JS/CSS · `_headers` · `README.txt`. 샘플 실습(dummy) 제외.
+   - 플레이어 빌드는 `build:extension`이 `recorder/dist/player/`에 함께 넣고 `files.json` 목록을 만든다. 따라서 내보내기는 **확장 안의 에디터에서만** 동작(localhost 개발 에디터는 안내 메시지).
 4. 이후 후보: 프로젝트 JSON/ZIP 백업·불러오기(PRD P0, 확장 삭제 시 데이터 소실 대비), input/choice 단계 편집 UI, Playwright 테스트를 저장소에 정식 추가(QA-01).
 
 ## 4. 작업 시 주의사항 (Rules)

@@ -228,7 +228,10 @@ export function useProject() {
     setSelectedStepId(null);
   }, [revokeAllObjectUrls, setManifest, setSelectedStepId]);
 
+  const getImageBlob = useCallback((assetId: string) => blobsRef.current.get(assetId), []);
+
   return {
+    getImageBlob,
     manifest,
     selectedStepId,
     images,

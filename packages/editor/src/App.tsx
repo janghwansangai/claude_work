@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { validateManifestGraph, type GraphReport, type Step } from '@walksim/shared';
+import { validateManifestGraph, type Manifest, type Step } from '@walksim/shared';
 import { parseCapturePayload } from './project';
 import { burnMasks } from './imaging';
 import { isExtensionPage, subscribeToCaptures, useEditorLock } from './captureSource';
@@ -7,6 +7,7 @@ import { useInbox } from './inbox/useInbox';
 import { useProject, type SaveStatus } from './storage/useProject';
 import { InboxReview } from './components/InboxReview';
 import { StepEditor } from './components/StepEditor';
+import { buildLessonZip, downloadBlob, exportBlockers, lessonSlug } from './export/exportZip';
 
 const SAVE_STATUS_LABEL: Record<SaveStatus, { text: string; className: string }> = {
   loading: { text: '불러오는 중…', className: 'text-gray-400' },
@@ -139,9 +140,9 @@ function App() {
             ✓ 안전 확인
           </button>
           <button
-            disabled
-            title="다음 작업에서 구현 예정: 안전 확인 통과 시 player 기반 정적 ZIP 생성"
-            className="bg-blue-600 text-white px-4 py-1.5 rounded-md font-medium transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={() => setView({ kind: 'safety' })}
+            disabled={!hydrated || manifest.steps.length === 0}
+            className="bg-blue-600 text-white px-4 py-1.5 rounded-md font-medium hover:bg-blue-700 transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             ZIP 내보내기
           </button>
@@ -218,7 +219,12 @@ function App() {
 
         <main className="flex-1 flex flex-col bg-gray-100 p-6 overflow-y-auto">
           {view.kind === 'safety' ? (
-            <SafetyPanel report={validateManifestGraph(manifest)} pendingInbox={inbox.items.length} />
+            <SafetyPanel
+              manifest={manifest}
+              pendingInbox={inbox.items.length}
+              missingImages={manifest.steps.filter(s => !images[s.assetId]).length}
+              getImage={project.getImageBlob}
+            />
           ) : inboxItem ? (
             <InboxReview
               key={inboxItem.id}
@@ -255,12 +261,35 @@ function App() {
   );
 }
 
-function SafetyPanel({ report, pendingInbox }: { report: GraphReport; pendingInbox: number }) {
-  const errors = pendingInbox > 0 ? [`검수함에 승인되지 않은 캡처가 ${pendingInbox}개 있습니다.`, ...report.errors] : report.errors;
+function SafetyPanel({ manifest, pendingInbox, missingImages, getImage }: {
+  manifest: Manifest; pendingInbox: number; missingImages: number; getImage: (assetId: string) => Blob | undefined;
+}) {
+  const [approved, setApproved] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const errors = exportBlockers(manifest, pendingInbox, missingImages);
+  const { warnings } = validateManifestGraph(manifest);
+
+  const exportZip = async () => {
+    setExporting(true);
+    setResult(null);
+    try {
+      const zip = await buildLessonZip(manifest, getImage);
+      const name = `walksim-${(manifest.title.trim() || lessonSlug(manifest)).replace(/[\\/:*?"<>|\s]+/g, '_')}.zip`;
+      downloadBlob(zip, name);
+      setResult({ ok: true, text: `${name} (${(zip.size / 1024).toFixed(0)} KB)을 내려받았습니다. 압축을 푼 폴더를 정적 웹호스팅에 올리면 학생 주소는 …/play/${lessonSlug(manifest)}/ 입니다.` });
+    } catch (err) {
+      console.error(err);
+      setResult({ ok: false, text: err instanceof Error ? err.message : 'ZIP을 만들지 못했습니다.' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl w-full mx-auto bg-white rounded-lg shadow-sm border p-6 flex flex-col gap-4">
-      <h2 className="text-lg font-bold">안전·구조 확인</h2>
-      {errors.length === 0 && report.warnings.length === 0 && (
+      <h2 className="text-lg font-bold">안전 확인 · ZIP 내보내기</h2>
+      {errors.length === 0 && warnings.length === 0 && (
         <p className="text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2 text-sm">자동 검사에서 문제를 찾지 못했습니다.</p>
       )}
       {errors.length > 0 && (
@@ -269,15 +298,34 @@ function SafetyPanel({ report, pendingInbox }: { report: GraphReport; pendingInb
           <ul className="list-disc pl-5 text-sm text-red-700 space-y-0.5">{errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
         </div>
       )}
-      {report.warnings.length > 0 && (
+      {warnings.length > 0 && (
         <div>
-          <h3 className="font-semibold text-amber-700 text-sm mb-1">확인 필요 ({report.warnings.length})</h3>
-          <ul className="list-disc pl-5 text-sm text-amber-700 space-y-0.5">{report.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+          <h3 className="font-semibold text-amber-700 text-sm mb-1">확인 필요 ({warnings.length})</h3>
+          <ul className="list-disc pl-5 text-sm text-amber-700 space-y-0.5">{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
         </div>
       )}
       <p className="text-xs text-gray-500">
-        자동 검사는 단계 연결과 자산만 확인합니다. 모든 이미지의 개인정보 여부는 교사가 직접 확인해야 합니다(PRD §12.2).
+        자동 검사는 단계 연결·자산·텍스트 속 개인정보 형태만 확인합니다. 모든 이미지의 개인정보 여부는 교사가 직접 확인해야 합니다(PRD §12.2).
       </p>
+
+      <div className="border-t pt-4 flex flex-col gap-3">
+        <label className="flex items-start gap-2 text-sm text-gray-700">
+          <input type="checkbox" className="w-4 h-4 mt-0.5" checked={approved} onChange={e => setApproved(e.target.checked)} disabled={errors.length > 0} />
+          {manifest.steps.length}개 단계의 이미지와 문구를 모두 다시 확인했고, 공개해도 되는 가상 자료만 있습니다.
+        </label>
+        <button
+          onClick={exportZip}
+          disabled={errors.length > 0 || !approved || exporting}
+          className="self-start bg-blue-600 text-white px-5 py-2 rounded-md font-medium hover:bg-blue-700 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {exporting ? 'ZIP 만드는 중…' : '학생용 ZIP 내려받기'}
+        </button>
+        {result && (
+          <p role="status" className={`text-sm rounded px-3 py-2 border ${result.ok ? 'text-green-800 bg-green-50 border-green-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
+            {result.text}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
