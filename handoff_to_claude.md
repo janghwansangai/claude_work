@@ -43,7 +43,10 @@ WalkSim 2.0은 학교 실습용 인터랙티브 웹 시뮬레이션 플랫폼입
    - 차단 조건: 미승인 검수함, 이미지 없는 단계, 그래프 오류, 학생에게 보이는 텍스트 속 이메일·전화·주민번호·카드번호 형태. 통과 후 교사 최종 확인 체크 필수.
    - ZIP 구조: `index.html`(→ `play/<id>/` 이동) · `play/<id>/index.html` · `play/<id>/manifest.json`(자산 경로 `../../assets/…`) · `assets/img-<hash>.webp` · 플레이어 JS/CSS · `_headers` · `README.txt`. 샘플 실습(dummy) 제외.
    - 플레이어 빌드는 `build:extension`이 `recorder/dist/player/`에 함께 넣고 `files.json` 목록을 만든다. 따라서 내보내기는 **확장 안의 에디터에서만** 동작(localhost 개발 에디터는 안내 메시지).
-4. 이후 후보: 프로젝트 JSON/ZIP 백업·불러오기(PRD P0, 확장 삭제 시 데이터 소실 대비), input/choice 단계 편집 UI, Playwright 테스트를 저장소에 정식 추가(QA-01).
+4. **동작 종류 확장** — ✅ 완료 (2026-09-26): 더블클릭·오른쪽 클릭·끌어서 놓기·단축키·스크롤·입력칸 위치 입력·연습용 비밀번호·확대(zoom). shared 스키마·플레이어·에디터·크롬 녹화기 모두 반영.
+5. **데스크톱 앱(Windows/macOS)** — ✅ 완료: `packages/desktop` (Electron). 영역 선택 → 전역 입력 훅(uiohook-napi) + 화면 스트림 메모리 버퍼로 동작 직전 화면 기록, Windows UI Automation으로 요소 상자·이름. 설치 파일은 `.github/workflows/walksim-build.yml`이 빌드.
+   - Linux/Xvfb에서 실제 X11 입력으로 E2E 검증 완료. **Windows UIA와 macOS 권한 흐름은 실제 기기에서 확인 필요.**
+6. 이후 후보: 프로젝트 JSON/ZIP 백업·불러오기(PRD P0, 확장 삭제 시 데이터 소실 대비), input/choice 단계 편집 UI, Playwright 테스트를 저장소에 정식 추가(QA-01).
 
 ## 4. 작업 시 주의사항 (Rules)
 - **보안 최우선**: 개인정보 보호가 가장 중요합니다. 마스킹 전 원본 캡처는 **메모리(검수함)에만** 존재해야 하며 IndexedDB·localStorage·ZIP·로그·네트워크 어디에도 쓰면 안 됩니다.
