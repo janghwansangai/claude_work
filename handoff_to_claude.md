@@ -37,7 +37,9 @@ WalkSim 2.0은 학교 실습용 인터랙티브 웹 시뮬레이션 플랫폼입
 
 현재 워크플로우(캡처 -> 에디터 전달 -> 플레이어)의 뼈대는 뚫려 있으나, **데이터의 영구 보존 및 고도화**가 필요합니다.
 
-1. **에디터 IndexedDB 연동 (우선순위 높음)**:
+1. **에디터 IndexedDB 연동 (우선순위 높음)** — ✅ 완료 (Claude):
+   - `packages/editor/src/storage/db.ts`: `idb` 기반 DB `walksim-editor` (`projects`, `assets`(Blob, `by-project` 인덱스), `meta`).
+   - `packages/editor/src/storage/useProject.ts`: 시작 시 마지막 프로젝트 복원, 편집 내용 디바운스 저장, 캡처는 이미지+Manifest를 단일 트랜잭션으로 즉시 저장, "새 프로젝트" 시 로컬 데이터 완전 삭제.
    - 현재 에디터는 새로고침 시 메모리에 있는 캡처본(Data URL)과 Step들이 날아갑니다. `idb` 또는 `localforage` 라이브러리를 사용해 수신된 Manifest 객체와 캡처된 이미지들을 브라우저 내장 IndexedDB에 영구 저장하도록 수정해 주세요.
 2. **불투명 마스킹 UI 구현**:
    - 에디터의 화면 미리보기 영역에서 마우스로 영역을 드래그하여 불투명한 색상(개인정보 가림용) 박스를 덧씌우는 기능이 필요합니다.

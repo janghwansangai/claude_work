@@ -1,87 +1,70 @@
-import { useState, useEffect } from 'react';
-import type { Manifest, Step } from '@walksim/shared';
+import { useEffect } from 'react';
+import type { Step } from '@walksim/shared';
+import { parseCapturePayload } from './project';
+import { useProject, type SaveStatus } from './storage/useProject';
 
-const initialManifest: Manifest = {
-  schemaVersion: 2,
-  id: "draft-project-1",
-  version: "1.0.0",
-  title: "제목 없는 실습 프로젝트",
-  notice: "모의 실습입니다. 실제 계정과 실제 비밀번호를 입력하지 마세요.",
-  mode: "practice",
-  viewport: { width: 1280, height: 720, dpr: 1 },
-  startStepId: "step-1",
-  assets: {},
-  steps: [
-    {
-      id: "step-1",
-      type: "click",
-      assetId: "",
-      instruction: "첫 번째 단계 설명을 입력하세요.",
-      hotspots: []
-    }
-  ]
+const SAVE_STATUS_LABEL: Record<SaveStatus, { text: string; className: string }> = {
+  loading: { text: '불러오는 중…', className: 'text-gray-400' },
+  idle: { text: '이 브라우저에만 저장됩니다', className: 'text-gray-400' },
+  saving: { text: '저장 중…', className: 'text-gray-500' },
+  saved: { text: '✓ 이 브라우저에 저장됨', className: 'text-green-600' },
+  error: { text: '⚠ 저장 실패 (브라우저 저장소 확인 필요)', className: 'text-red-600' },
 };
 
 function App() {
-  const [manifest, setManifest] = useState<Manifest>(initialManifest);
-  const [selectedStepId, setSelectedStepId] = useState<string>(initialManifest.startStepId);
-  const [capturedImages, setCapturedImages] = useState<Record<string, string>>({}); // assetId -> dataUrl
+  const {
+    manifest,
+    selectedStepId,
+    imageUrls,
+    hydrated,
+    saveStatus,
+    setSelectedStepId,
+    updateManifest,
+    addCapture,
+    resetProject,
+  } = useProject();
 
+  // 저장된 프로젝트 복원이 끝난 뒤에만 캡처를 받아, 복원 데이터가 새 캡처를 덮어쓰지 않도록 한다.
   useEffect(() => {
+    if (!hydrated) return;
     const handleMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === "WALKSIM_NEW_CAPTURE") {
-        const { image, rect, tagName, timestamp } = event.data.payload;
-        
-        const newAssetId = `asset-${timestamp}`;
-        setCapturedImages(prev => ({ ...prev, [newAssetId]: image }));
-
-        const newStep: Step = {
-          id: `step-${timestamp}`,
-          type: "click",
-          assetId: newAssetId,
-          instruction: `${tagName} 요소를 클릭했습니다. 지시사항을 입력하세요.`,
-          hotspots: [
-            {
-              id: "hotspot-1",
-              rect: rect,
-              nextStepId: ""
-            }
-          ]
-        };
-
-        setManifest(prev => {
-          const updatedSteps = [...prev.steps, newStep];
-          // Connect previous step to this new one if it's a click step without a nextStepId
-          const previousStepIndex = updatedSteps.length - 2;
-          if (previousStepIndex >= 0) {
-            const prevStep = updatedSteps[previousStepIndex];
-            if (prevStep.type === 'click' && prevStep.hotspots.length > 0 && !prevStep.hotspots[0].nextStepId) {
-              prevStep.hotspots[0].nextStepId = newStep.id;
-            }
-          }
-          return { ...prev, steps: updatedSteps };
-        });
-        
-        setSelectedStepId(newStep.id);
+      // editor-bridge 콘텐츠 스크립트는 같은 창에서 postMessage 한다. 다른 창/iframe에서 온 메시지는 무시.
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      if (event.data?.type !== "WALKSIM_NEW_CAPTURE") return;
+      const capture = parseCapturePayload(event.data.payload);
+      if (!capture) {
+        console.warn("잘못된 캡처 메시지를 무시했습니다.");
+        return;
       }
+      void addCapture(capture);
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [hydrated, addCapture]);
 
   const selectedStep = manifest.steps.find(s => s.id === selectedStepId);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setManifest({ ...manifest, title: e.target.value });
+    const title = e.target.value;
+    updateManifest(prev => ({ ...prev, title }));
   };
 
   const handleInstructionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (!selectedStep) return;
-    const newSteps = manifest.steps.map(s => 
-      s.id === selectedStep.id ? { ...s, instruction: e.target.value } : s
-    );
-    setManifest({ ...manifest, steps: newSteps as Step[] });
+    const stepId = selectedStep.id;
+    const instruction = e.target.value;
+    updateManifest(prev => ({
+      ...prev,
+      steps: prev.steps.map((s): Step => (s.id === stepId ? { ...s, instruction } : s)),
+    }));
   };
+
+  const handleReset = () => {
+    const ok = window.confirm("현재 프로젝트와 캡처 이미지를 이 브라우저에서 모두 삭제하고 새로 시작합니다. 계속할까요?");
+    if (ok) void resetProject();
+  };
+
+  const status = SAVE_STATUS_LABEL[saveStatus];
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 text-gray-900">
@@ -92,10 +75,19 @@ function App() {
             type="text" 
             value={manifest.title} 
             onChange={handleTitleChange}
+            disabled={!hydrated}
             className="border-gray-300 border rounded px-3 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
+          <span className={`text-xs ${status.className}`} role="status">{status.text}</span>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={handleReset}
+            disabled={!hydrated}
+            className="bg-white border border-gray-300 text-gray-600 px-4 py-1.5 rounded-md font-medium hover:bg-gray-100 transition text-sm disabled:opacity-50"
+          >
+            새 프로젝트
+          </button>
           <button className="bg-green-100 text-green-700 px-4 py-1.5 rounded-md font-medium hover:bg-green-200 transition text-sm">
             ✓ 안전 확인
           </button>
@@ -142,8 +134,8 @@ function App() {
               <div>
                 <h3 className="font-semibold text-gray-800 mb-2">화면 미리보기 (마스킹/핫스팟 편집)</h3>
                 <div className="aspect-video bg-gray-200 rounded flex items-center justify-center border-2 border-dashed border-gray-300 relative overflow-hidden">
-                  {selectedStep.assetId && capturedImages[selectedStep.assetId] ? (
-                    <img src={capturedImages[selectedStep.assetId]} alt="캡처 화면" className="w-full h-full object-contain pointer-events-none" />
+                  {selectedStep.assetId && imageUrls[selectedStep.assetId] ? (
+                    <img src={imageUrls[selectedStep.assetId]} alt="캡처 화면" className="w-full h-full object-contain pointer-events-none" />
                   ) : (
                     <span className="text-gray-500 text-sm">확장 프로그램에서 캡처한 이미지가 여기에 표시됩니다.</span>
                   )}
