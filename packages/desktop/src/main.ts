@@ -174,19 +174,22 @@ async function startCapture(display: Display, region: RectDip): Promise<BrowserW
   return win;
 }
 
-// 렌더러에 요청을 보내고 응답을 기다린다(ipcRenderer.invoke의 반대 방향).
+// 렌더러에 요청을 보내고 응답을 기다린다(ipcRenderer.invoke의 반대 방향). 응답은 하나의 리스너가 번호로 나눠 준다.
 let reqSeq = 0;
+const replies = new Map<number, { wc: Electron.WebContents; resolve: (v: unknown) => void; timer: ReturnType<typeof setTimeout> }>();
+ipcMain.on('ui:reply', (e, id: number, value: unknown) => {
+  const pending = replies.get(id);
+  if (!pending || pending.wc !== e.sender) return;
+  clearTimeout(pending.timer);
+  replies.delete(id);
+  pending.resolve(value);
+});
+
 function invokeRenderer<T>(win: BrowserWindow, channel: string, args: unknown, timeoutMs = 8000): Promise<T> {
   const reqId = ++reqSeq;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { ipcMain.removeListener('ui:reply', onReply); reject(new Error(`${channel} 응답 없음`)); }, timeoutMs);
-    const onReply = (e: Electron.IpcMainEvent, id: number, value: T) => {
-      if (id !== reqId || e.sender !== win.webContents) return;
-      clearTimeout(timer);
-      ipcMain.removeListener('ui:reply', onReply);
-      resolve(value);
-    };
-    ipcMain.on('ui:reply', onReply);
+    const timer = setTimeout(() => { replies.delete(reqId); reject(new Error(`${channel} 응답 없음`)); }, timeoutMs);
+    replies.set(reqId, { wc: win.webContents, resolve: v => resolve(v as T), timer });
     win.webContents.send(channel, reqId, args);
   });
 }
