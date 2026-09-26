@@ -7,7 +7,7 @@
   "scripts": {
     "dev:editor": "npm run dev -w @walksim/editor",
     "dev:player": "npm run dev -w @walksim/player",
-    "build:shared": "npm run build -w @walksim/shared",
+    "typecheck:shared": "npm run typecheck -w @walksim/shared",
     "export:static": "npm run build -w @walksim/player && cd packages/player/dist && zip -r ../../../walksim-dist.zip ."
   },
   "devDependencies": {
