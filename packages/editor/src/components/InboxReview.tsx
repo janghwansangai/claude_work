@@ -20,7 +20,7 @@ export function InboxReview({ item, position, total, busy, onChange, onApprove, 
 
   return (
     <div className="max-w-5xl w-full mx-auto bg-white rounded-lg shadow-sm border p-6 flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold text-amber-600">검수함 {position} / {total} · 아직 저장되지 않음</p>
           <h2 className="text-lg font-bold text-gray-800">개인정보를 가린 뒤 승인하세요</h2>

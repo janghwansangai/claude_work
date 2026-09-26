@@ -111,7 +111,7 @@ function App() {
         </div>
       )}
 
-      <header className="bg-white border-b px-6 py-3 flex items-center justify-between shadow-sm z-10 gap-4">
+      <header className="bg-white border-b px-6 py-3 flex flex-wrap items-center justify-between shadow-sm z-10 gap-3">
         <div className="flex items-center gap-4 min-w-0">
           <h1 className="text-xl font-bold text-blue-600 shrink-0">WalkSim Editor</h1>
           <input
@@ -122,7 +122,7 @@ function App() {
             disabled={!hydrated}
             className="border-gray-300 border rounded px-3 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
-          <span className={`text-xs ${status.className}`} role="status">{status.text}</span>
+          <span className={`text-xs whitespace-nowrap ${status.className}`} role="status">{status.text}</span>
         </div>
         <div className="flex gap-2 shrink-0">
           <button
@@ -156,7 +156,7 @@ function App() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <aside className="w-72 bg-white border-r flex flex-col overflow-y-auto">
+        <aside className="w-72 shrink-0 bg-white border-r flex flex-col overflow-y-auto">
           <section className="p-3 border-b">
             <h2 className="font-semibold text-gray-700 text-sm mb-2 flex items-center gap-2">
               검수함

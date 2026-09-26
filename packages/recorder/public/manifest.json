@@ -1,15 +1,19 @@
 {
   "manifest_version": 3,
   "name": "WalkSim Recorder",
-  "version": "1.0",
-  "description": "WalkSim 2.0 화면 녹화기",
+  "version": "1.1.0",
+  "description": "WalkSim 2.0 화면 녹화기 + 로컬 편집기",
+  "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage",
+    "unlimitedStorage"
   ],
   "host_permissions": [],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_title": "WalkSim Recorder"
   },
   "background": {
     "service_worker": "background.js",

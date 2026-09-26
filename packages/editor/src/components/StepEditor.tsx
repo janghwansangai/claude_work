@@ -34,7 +34,7 @@ export function StepEditor({ manifest, step, index, image, onUpdate, onSetHotspo
 
   return (
     <div className="max-w-5xl w-full mx-auto bg-white rounded-lg shadow-sm border p-6 flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold text-gray-500">
             단계 {index + 1} / {manifest.steps.length}{manifest.startStepId === step.id ? ' · 시작 단계' : ''}

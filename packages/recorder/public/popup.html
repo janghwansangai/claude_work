@@ -3,18 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    body { font-family: sans-serif; padding: 10px; width: 250px; }
-    button { width: 100%; padding: 8px; margin-top: 10px; cursor: pointer; background: #3b82f6; color: white; border: none; border-radius: 4px; }
-    button:hover { background: #2563eb; }
-    .warning { color: #d97706; font-size: 12px; margin-top: 10px; }
+    body { font-family: system-ui, sans-serif; padding: 12px; width: 280px; margin: 0; color: #111827; }
+    h3 { margin: 0 0 8px; font-size: 15px; }
+    button { width: 100%; padding: 8px; margin-top: 8px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 13px; }
+    button:hover:not(:disabled) { background: #1d4ed8; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button[hidden], [hidden] { display: none; }
+    #stop-btn { background: #dc2626; }
+    #editor-btn { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+    .warning { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 12px; padding: 8px; margin: 0 0 8px; line-height: 1.5; }
+    label { display: flex; gap: 6px; font-size: 12px; align-items: flex-start; line-height: 1.4; }
+    #status { font-size: 12px; color: #374151; margin: 8px 0 0; min-height: 1em; }
   </style>
 </head>
 <body>
-  <h3 style="margin-top:0">WalkSim Recorder</h3>
-  <p style="font-size:13px">녹화할 화면이 준비되었나요?</p>
-  <button id="start-btn">현재 탭 녹화 시작</button>
-  <button id="stop-btn" style="display:none; background:#ef4444">녹화 중지</button>
-  <p class="warning">⚠️ 실제 학교 계정이나 비밀번호 화면에서 촬영하지 마세요.</p>
+  <h3>WalkSim Recorder</h3>
+  <div id="prep">
+    <p class="warning">⚠️ 실제 학교 계정, 학생 명단, 비밀번호가 보이는 화면에서 촬영하지 마세요. 더미 계정과 가상 자료로 화면을 준비하세요.</p>
+    <label><input type="checkbox" id="dummy-check"> 더미 계정·가상 자료로 준비한 화면입니다.</label>
+  </div>
+  <button id="start-btn" disabled>이 탭 녹화 시작</button>
+  <button id="stop-btn" hidden>녹화 중지</button>
+  <button id="editor-btn">에디터 열기</button>
+  <p id="status" role="status"></p>
   <script src="popup.js"></script>
 </body>
 </html>
