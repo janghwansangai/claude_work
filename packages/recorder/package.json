@@ -1,0 +1,15 @@
+{
+  "name": "@walksim/recorder",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/chrome": "^0.0.260",
+    "esbuild": "^0.20.1"
+  },
+  "dependencies": {
+    "@walksim/shared": "1.0.0"
+  }
+}

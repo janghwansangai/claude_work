@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: sans-serif; padding: 10px; width: 250px; }
+    button { width: 100%; padding: 8px; margin-top: 10px; cursor: pointer; background: #3b82f6; color: white; border: none; border-radius: 4px; }
+    button:hover { background: #2563eb; }
+    .warning { color: #d97706; font-size: 12px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h3 style="margin-top:0">WalkSim Recorder</h3>
+  <p style="font-size:13px">녹화할 화면이 준비되었나요?</p>
+  <button id="start-btn">현재 탭 녹화 시작</button>
+  <button id="stop-btn" style="display:none; background:#ef4444">녹화 중지</button>
+  <p class="warning">⚠️ 실제 학교 계정이나 비밀번호 화면에서 촬영하지 마세요.</p>
+  <script src="popup.js"></script>
+</body>
+</html>

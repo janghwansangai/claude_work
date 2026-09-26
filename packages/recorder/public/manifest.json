@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "WalkSim Recorder",
+  "version": "1.0",
+  "description": "WalkSim 2.0 화면 녹화기",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:*/*",
+        "http://127.0.0.1:*/*"
+      ],
+      "js": [
+        "editor-bridge.js"
+      ]
+    }
+  ]
+}
