@@ -8,6 +8,9 @@ on:
   workflow_dispatch:
   push:
     tags: ['desktop-v*']
+    # 작업 브랜치에 코드가 올라오면 설치 파일을 새로 만든다(Actions → 실행 기록 → Artifacts에서 내려받기).
+    branches: ['claude/**']
+    paths: ['packages/**', 'package.json', 'package-lock.json', '.github/workflows/walksim-build.yml']
 
 jobs:
   desktop:
