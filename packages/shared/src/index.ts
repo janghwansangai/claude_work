@@ -10,24 +10,33 @@ export const AssetPathSchema = z.string().min(1).refine(
   { message: '자산 경로는 배포 패키지 내부의 상대 경로여야 합니다.' },
 );
 
-export const ClickStepSchema = z.object({
+// 모든 단계의 공통 필드. zoom: 이 단계에서 확대해 보여 줄 영역(Arcade의 Pan & Zoom)
+const StepBase = z.object({
   id: z.string(),
-  type: z.literal('click'),
   assetId: z.string(),
   instruction: z.string(),
+  hint: z.string().optional(),
+  zoom: RectSchema.optional(),
+});
+
+export const ClickActionSchema = z.enum(['click', 'double', 'right']);
+export type ClickAction = z.infer<typeof ClickActionSchema>;
+
+export const ClickStepSchema = StepBase.extend({
+  type: z.literal('click'),
   hotspots: z.array(z.object({
     id: z.string(),
     rect: RectSchema,
-    nextStepId: z.string()
+    nextStepId: z.string(),
+    action: ClickActionSchema.optional(), // 없으면 'click'
   })),
-  hint: z.string().optional()
 });
 
-export const InputStepSchema = z.object({
-  id: z.string(),
+// 가짜 입력. rect가 있으면 화면 속 입력칸 위치에 실제 입력창을 겹쳐 보여 준다.
+// acceptedValues가 비어 있으면 비어 있지 않은 아무 값이나 정답. mode 'password-sample'은 연습용 가상 비밀번호만 채운다.
+export const InputStepSchema = StepBase.extend({
   type: z.literal('input'),
-  assetId: z.string(),
-  instruction: z.string(),
+  rect: RectSchema.optional(),
   input: z.object({
     mode: z.string(),
     placeholder: z.string().optional(),
@@ -35,28 +44,49 @@ export const InputStepSchema = z.object({
     storeInput: z.boolean().default(false)
   }),
   nextStepId: z.string(),
-  hint: z.string().optional()
 });
 
-export const ChoiceStepSchema = z.object({
-  id: z.string(),
+export const ChoiceStepSchema = StepBase.extend({
   type: z.literal('choice'),
-  assetId: z.string(),
-  instruction: z.string(),
   choices: z.array(z.object({
     label: z.string(),
     nextStepId: z.string()
   })),
-  hint: z.string().optional()
+});
+
+// 끌어서 놓기: from 영역을 잡아 to 영역에 놓는다.
+export const DragStepSchema = StepBase.extend({
+  type: z.literal('drag'),
+  from: RectSchema,
+  to: RectSchema,
+  nextStepId: z.string(),
+});
+
+// 단축키: keys 중 하나를 누르면 정답. 예: ["Ctrl+S"]. 재생 시 Ctrl과 Cmd(⌘)는 같은 키로 인정한다.
+export const KeyStepSchema = StepBase.extend({
+  type: z.literal('key'),
+  keys: z.array(z.string().min(1)).min(1),
+  nextStepId: z.string(),
+});
+
+export const ScrollStepSchema = StepBase.extend({
+  type: z.literal('scroll'),
+  rect: RectSchema,
+  direction: z.enum(['up', 'down', 'left', 'right']),
+  nextStepId: z.string(),
 });
 
 export const StepSchema = z.discriminatedUnion('type', [
   ClickStepSchema,
   InputStepSchema,
-  ChoiceStepSchema
+  ChoiceStepSchema,
+  DragStepSchema,
+  KeyStepSchema,
+  ScrollStepSchema,
 ]);
 
 export type Step = z.infer<typeof StepSchema>;
+export type StepType = Step['type'];
 
 export const ManifestSchema = z.object({
   schemaVersion: z.literal(2),
@@ -85,9 +115,89 @@ export function validateManifest(data: unknown): Manifest {
 export function nextStepIds(step: Step): string[] {
   switch (step.type) {
     case 'click': return step.hotspots.map(h => h.nextStepId);
-    case 'input': return [step.nextStepId];
     case 'choice': return step.choices.map(c => c.nextStepId);
+    default: return [step.nextStepId];
   }
+}
+
+/** 단계의 모든 "다음 단계" 연결을 fn으로 바꾼 새 단계를 돌려준다. */
+export function mapNextStepIds(step: Step, fn: (id: string) => string): Step {
+  switch (step.type) {
+    case 'click': return { ...step, hotspots: step.hotspots.map(h => ({ ...h, nextStepId: fn(h.nextStepId) })) };
+    case 'choice': return { ...step, choices: step.choices.map(c => ({ ...c, nextStepId: fn(c.nextStepId) })) };
+    default: return { ...step, nextStepId: fn(step.nextStepId) };
+  }
+}
+
+/** 말풍선·편집 도구가 기준으로 삼는 단계의 대표 영역. */
+export function stepAnchor(step: Step): Rect | undefined {
+  switch (step.type) {
+    case 'click': return step.hotspots[0]?.rect;
+    case 'drag': return step.from;
+    case 'input': return step.rect;
+    case 'scroll': return step.rect;
+    default: return undefined;
+  }
+}
+
+export interface KeyPress {
+  key: string;
+  code?: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+}
+
+const MODIFIER_KEYS = new Set(['Control', 'Meta', 'Alt', 'Shift', 'AltGraph', 'CapsLock', 'Fn', 'OS']);
+const KEY_ALIASES: Record<string, string> = {
+  ' ': 'Space', Esc: 'Escape', Del: 'Delete', Return: 'Enter',
+  Left: 'ArrowLeft', Right: 'ArrowRight', Up: 'ArrowUp', Down: 'ArrowDown',
+};
+
+function baseKeyName(press: KeyPress): string {
+  // Shift·한글 입력 상태와 상관없이 같은 이름이 나오도록 물리 키(code)를 우선 사용한다.
+  if (press.code?.startsWith('Key')) return press.code.slice(3);
+  if (press.code?.startsWith('Digit')) return press.code.slice(5);
+  const key = KEY_ALIASES[press.key] ?? press.key;
+  return key.length === 1 ? key.toUpperCase() : key;
+}
+
+/** 키 입력을 "Ctrl+Shift+S" 형태로 만든다. 수정 키만 눌렸으면 null. Cmd(⌘)는 Ctrl로 기록한다. */
+export function formatKeyCombo(press: KeyPress): string | null {
+  if (MODIFIER_KEYS.has(press.key)) return null;
+  const parts: string[] = [];
+  if (press.ctrlKey || press.metaKey) parts.push('Ctrl');
+  if (press.altKey) parts.push('Alt');
+  if (press.shiftKey) parts.push('Shift');
+  parts.push(baseKeyName(press));
+  return parts.join('+');
+}
+
+/** "ctrl + s", "Cmd+S", "⌘S" 등 사람이 적은 조합을 formatKeyCombo 형식으로 정리한다. */
+export function normalizeKeyCombo(text: string): string {
+  const raw = text.replace(/⌘/g, 'Cmd+').replace(/⌥/g, 'Alt+').replace(/⇧/g, 'Shift+');
+  const parts = raw.split('+').map(p => p.trim()).filter(Boolean);
+  const mods = new Set<string>();
+  let key = '';
+  for (const p of parts) {
+    const lower = p.toLowerCase();
+    if (['ctrl', 'control', 'cmd', 'command', 'meta', 'win'].includes(lower)) mods.add('Ctrl');
+    else if (['alt', 'option', 'opt'].includes(lower)) mods.add('Alt');
+    else if (lower === 'shift') mods.add('Shift');
+    else key = KEY_ALIASES[p] ?? (p.length === 1 ? p.toUpperCase() : p[0].toUpperCase() + p.slice(1));
+  }
+  return [...['Ctrl', 'Alt', 'Shift'].filter(m => mods.has(m)), key].join('+');
+}
+
+export function keysMatch(expected: string[], press: KeyPress): boolean {
+  const pressed = formatKeyCombo(press);
+  return pressed !== null && expected.some(k => normalizeKeyCombo(k) === pressed);
+}
+
+/** 학생에게 보여 줄 키 이름. 맥에서는 Ctrl을 ⌘로 표시한다. */
+export function displayKeyCombo(combo: string, isMac: boolean): string {
+  return normalizeKeyCombo(combo).split('+').map(k => (isMac && k === 'Ctrl' ? '⌘' : k)).join(' + ');
 }
 
 export interface GraphReport {
@@ -104,6 +214,12 @@ export function validateManifestGraph(manifest: Manifest): GraphReport {
   for (const step of manifest.steps) {
     if (ids.has(step.id)) errors.push(`단계 ID가 중복됩니다: ${step.id}`);
     ids.add(step.id);
+  }
+  for (const step of manifest.steps) {
+    if (step.type === 'input' && step.input.mode !== 'password-sample' && step.input.acceptedValues.length === 0) {
+      warnings.push(`${step.id}: 입력 단계에 정답 값이 없어 아무 값이나 통과합니다.`);
+    }
+    if (step.type === 'choice' && step.choices.length === 0) errors.push(`${step.id}: 선택지가 없습니다.`);
   }
   if (manifest.steps.length === 0) {
     errors.push('단계가 하나도 없습니다.');
@@ -135,7 +251,7 @@ export function validateManifestGraph(manifest: Manifest): GraphReport {
   for (const step of manifest.steps) {
     if (!reachable.has(step.id)) warnings.push(`${step.id}: 시작 단계에서 도달할 수 없습니다.`);
   }
-  if (reachable.size > 0 && !hasReachableEnd) warnings.push('도달 가능한 종료 단계(핫스팟 없는 클릭 단계)가 없습니다.');
+  if (reachable.size > 0 && !hasReachableEnd) warnings.push('도달 가능한 종료 단계(클릭 영역 없는 단계)가 없습니다.');
 
   return { errors, warnings };
 }

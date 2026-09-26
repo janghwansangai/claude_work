@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 2,
+  "id": "step-types",
+  "version": "1.0.0",
+  "title": "모든 동작 연습",
+  "notice": "모의 실습입니다. 실제 계정과 실제 비밀번호를 입력하지 마세요.",
+  "mode": "guide",
+  "viewport": { "width": 1280, "height": 720, "dpr": 1 },
+  "startStepId": "dbl",
+  "assets": {
+    "base1": "../../assets/dummy-1.svg",
+    "base2": "../../assets/dummy-2.svg"
+  },
+  "steps": [
+    { "id": "dbl", "type": "click", "assetId": "base1", "instruction": "폴더를 더블클릭해 여세요.",
+      "hotspots": [{ "id": "h1", "rect": [0.1, 0.2, 0.13, 0.07], "nextStepId": "right", "action": "double" }] },
+    { "id": "right", "type": "click", "assetId": "base1", "instruction": "파일을 오른쪽 클릭하세요.",
+      "hotspots": [{ "id": "h2", "rect": [0.5, 0.5, 0.1, 0.08], "nextStepId": "drag", "action": "right" }] },
+    { "id": "drag", "type": "drag", "assetId": "base2", "instruction": "파일을 휴지통으로 끌어 놓으세요.",
+      "from": [0.1, 0.3, 0.1, 0.1], "to": [0.8, 0.7, 0.1, 0.15], "nextStepId": "key" },
+    { "id": "key", "type": "key", "assetId": "base2", "instruction": "문서를 저장하세요.", "keys": ["Ctrl+S"], "nextStepId": "scroll",
+      "hint": "Ctrl(맥은 ⌘)을 누른 채 S를 누릅니다." },
+    { "id": "scroll", "type": "scroll", "assetId": "base1", "instruction": "아래로 스크롤하세요.",
+      "rect": [0.2, 0.2, 0.6, 0.6], "direction": "down", "nextStepId": "name" },
+    { "id": "name", "type": "input", "assetId": "base1", "instruction": "아이디 칸에 연습용 아이디를 입력하세요.",
+      "rect": [0.35, 0.4, 0.3, 0.06], "zoom": [0.25, 0.25, 0.5, 0.5],
+      "input": { "mode": "text", "placeholder": "student01", "acceptedValues": [], "storeInput": false }, "nextStepId": "pw" },
+    { "id": "pw", "type": "input", "assetId": "base1", "instruction": "비밀번호 칸을 채우세요.",
+      "rect": [0.35, 0.5, 0.3, 0.06],
+      "input": { "mode": "password-sample", "acceptedValues": [], "storeInput": false }, "nextStepId": "end" },
+    { "id": "end", "type": "click", "assetId": "base2", "instruction": "모든 동작을 연습했습니다!", "hotspots": [] }
+  ]
+}
