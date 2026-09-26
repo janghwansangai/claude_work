@@ -9,7 +9,10 @@
     "dev:player": "npm run dev -w @walksim/player",
     "typecheck:shared": "npm run typecheck -w @walksim/shared",
     "build:extension": "npm run build -w @walksim/recorder",
-    "export:static": "npm run build -w @walksim/player && cd packages/player/dist && zip -r ../../../walksim-dist.zip ."
+    "export:static": "npm run build -w @walksim/player && cd packages/player/dist && zip -r ../../../walksim-dist.zip .",
+    "dev:desktop": "npm run start -w @walksim/desktop",
+    "build:desktop": "npm run build -w @walksim/desktop",
+    "test": "npm test -w @walksim/desktop"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

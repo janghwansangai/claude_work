@@ -13,6 +13,7 @@ export interface InboxItem {
   viewport: Viewport | null;
   target: CaptureTarget | null;
   action: RecordedAction | null;
+  source: 'browser' | 'desktop';
   masks: Rect[];
   suggestedCount: number;
   instruction: string;
@@ -38,6 +39,7 @@ export function useInbox() {
       viewport: payload.viewport,
       target: payload.target,
       action: payload.action,
+      source: payload.source,
       // 레코더가 찾은 민감정보 후보는 기본으로 가림 처리된 상태로 시작한다(교사가 해제 가능).
       masks: payload.suggestedMasks,
       suggestedCount: payload.suggestedMasks.length,

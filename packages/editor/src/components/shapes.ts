@@ -34,6 +34,7 @@ export function captureShapes(rect: Rect | null, action: RecordedAction | null):
     return [{ rect, kind: 'from', label: '잡을 곳' }, ...(action?.to ? [{ rect: action.to, kind: 'to' as const, label: '놓을 곳' }] : [])];
   }
   if (kind === 'type') return [{ rect, kind: 'input', label: '입력칸' }];
+  if (kind === 'scroll') return [{ rect, kind: 'scroll', label: '스크롤 영역' }];
   return [{ rect, kind: 'hotspot', label: PRIMARY_LABEL[kind] ?? '클릭 영역' }];
 }
 

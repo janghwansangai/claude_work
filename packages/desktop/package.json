@@ -1,0 +1,93 @@
+{
+  "name": "@walksim/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WalkSim 데스크톱 녹화기 + 편집기 (Windows / macOS)",
+  "author": "WalkSim",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node build.js",
+    "start": "npm run build && electron .",
+    "test": "node build.js --tests-only && node --test dist-test/*.test.mjs",
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --x64 --arm64 --publish never",
+    "dist:linux": "npm run build && electron-builder --linux dir --publish never"
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.4"
+  },
+  "devDependencies": {
+    "@walksim/shared": "1.0.0",
+    "electron": "44.4.5",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.20.1",
+    "typescript": "~6.0.2"
+  },
+  "build": {
+    "appId": "app.walksim.desktop",
+    "productName": "WalkSim",
+    "copyright": "WalkSim",
+    "directories": {
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "!dist-test"
+    ],
+    "asarUnpack": [
+      "**/node_modules/uiohook-napi/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "WalkSim-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "WalkSim"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.education",
+      "identity": "-",
+      "artifactName": "WalkSim-${version}-mac-${arch}.${ext}",
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "실습 화면을 녹화하려면 화면 기록 권한이 필요합니다."
+      }
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Education",
+      "executableName": "walksim"
+    },
+    "npmRebuild": false,
+    "executableName": "WalkSim",
+    "publish": null
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/janghwansangai/claude_work.git"
+  }
+}

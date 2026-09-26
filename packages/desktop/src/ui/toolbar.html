@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>WalkSim 녹화 중</title>
+<style>
+  html, body { margin: 0; background: transparent; font-family: system-ui, -apple-system, "Malgun Gothic", sans-serif; overflow: hidden; }
+  .bar { display: flex; align-items: center; gap: 10px; background: rgba(17, 24, 39, 0.94); color: #fff; border-radius: 26px; padding: 8px 10px 8px 16px; height: 36px; font-size: 13px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: blink 1.2s infinite; }
+  .paused .dot { background: #f59e0b; animation: none; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .grow { flex: 1; white-space: nowrap; }
+  .hint { color: #9ca3af; font-size: 11px; white-space: nowrap; }
+  button { border: 0; border-radius: 16px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  #pause { background: #374151; color: #fff; }
+  #stop { background: #ef4444; color: #fff; }
+</style></head>
+<body>
+  <div class="bar" id="bar">
+    <span class="dot"></span>
+    <span class="grow" id="label">녹화 중 · 0개</span>
+    <span class="hint" id="hint"></span>
+    <button id="pause">일시정지</button>
+    <button id="stop">중지</button>
+  </div>
+  <script src="toolbar.js"></script>
+</body></html>

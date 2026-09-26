@@ -3,3 +3,5 @@ dist/
 .env
 .DS_Store
 walksim-dist.zip
+packages/desktop/release/
+packages/desktop/dist-test/

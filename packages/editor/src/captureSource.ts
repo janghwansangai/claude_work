@@ -1,14 +1,31 @@
 import { useEffect, useState } from 'react';
 
 // 캡처 수신 경로
+//  0) WalkSim 데스크톱 앱(Windows·macOS): preload가 노출한 window.walksimDesktop
 //  1) 확장 프로그램 안의 에디터 페이지(chrome-extension://…/editor/): chrome.runtime 메시지. 교사용 기본 경로.
 //     원본 캡처가 일반 웹페이지 컨텍스트를 거치지 않는다.
 //  2) 개발용 localhost 에디터: 레코더의 editor-bridge 콘텐츠 스크립트가 window.postMessage로 전달.
 export const isExtensionPage = typeof chrome !== 'undefined' && !!chrome.runtime?.id && location.protocol === 'chrome-extension:';
 
+export interface DesktopBridge {
+  platform: string;
+  ready: () => void;
+  onCapture: (cb: (payload: unknown) => void) => () => void;
+  onState: (cb: (state: unknown) => void) => () => void;
+  startRecording: () => Promise<{ ok: boolean; error?: string }>;
+  stopRecording: () => Promise<void>;
+}
+
+export const desktop: DesktopBridge | undefined = (window as unknown as { walksimDesktop?: DesktopBridge }).walksimDesktop;
+
 export type CaptureHandler = (payload: unknown) => void;
 
 export function subscribeToCaptures(onCapture: CaptureHandler): () => void {
+  if (desktop) {
+    const off = desktop.onCapture(onCapture);
+    desktop.ready(); // 에디터가 준비되기 전에 쌓인 캡처를 보내도록 알린다
+    return off;
+  }
   if (isExtensionPage) {
     const listener = (msg: { action?: string; payload?: unknown }, sender: chrome.runtime.MessageSender, sendResponse: (r: unknown) => void) => {
       if (sender.id !== chrome.runtime.id || msg?.action !== 'NEW_CAPTURE') return;

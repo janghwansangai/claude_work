@@ -16,8 +16,9 @@ export interface CaptureTarget {
 
 // 레코더가 기록한 동작 종류. 입력값·키 입력 내용은 절대 담지 않는다(단축키 조합 이름만).
 export interface RecordedAction {
-  kind: 'click' | 'double' | 'right' | 'drag' | 'type' | 'key';
+  kind: 'click' | 'double' | 'right' | 'drag' | 'type' | 'key' | 'scroll';
   to?: Rect;          // drag: 놓은 곳
+  direction?: 'up' | 'down' | 'left' | 'right'; // scroll
   keys?: string;      // key: "Ctrl+S" 형태
   inputType?: string; // type: text/email/password 등 입력칸 종류
 }
@@ -29,6 +30,7 @@ export interface CapturePayload {
   target: CaptureTarget | null;
   suggestedMasks: Rect[]; // 레코더가 찾은 민감정보 후보 영역(텍스트는 전달하지 않음)
   action: RecordedAction | null; // null이면 녹화 종료 화면(또는 구버전 레코더의 클릭)
+  source: 'browser' | 'desktop';
   timestamp: number;
 }
 
@@ -83,10 +85,11 @@ export function parseCapturePayload(value: unknown): CapturePayload | null {
     ? p.suggestedMasks.map(parseRect).filter((r): r is Rect => r !== null).slice(0, 100)
     : [];
 
-  return { image: p.image, rect: parseRect(p.rect), viewport, target, suggestedMasks, action: parseAction(p.action), timestamp: p.timestamp };
+  return { image: p.image, rect: parseRect(p.rect), viewport, target, suggestedMasks, action: parseAction(p.action), source: p.source === 'desktop' ? 'desktop' : 'browser', timestamp: p.timestamp };
 }
 
-const ACTION_KINDS = new Set(['click', 'double', 'right', 'drag', 'type', 'key']);
+const ACTION_KINDS = new Set(['click', 'double', 'right', 'drag', 'type', 'key', 'scroll']);
+const DIRECTIONS = new Set(['up', 'down', 'left', 'right']);
 
 function parseAction(value: unknown): RecordedAction | null {
   if (!value || typeof value !== 'object') return null;
@@ -103,6 +106,7 @@ function parseAction(value: unknown): RecordedAction | null {
     action.keys = normalizeKeyCombo(a.keys);
   }
   if (action.kind === 'type' && typeof a.inputType === 'string') action.inputType = a.inputType.slice(0, 20);
+  if (action.kind === 'scroll') action.direction = typeof a.direction === 'string' && DIRECTIONS.has(a.direction) ? a.direction as RecordedAction['direction'] : 'down';
   return action;
 }
 
@@ -112,11 +116,13 @@ export function draftInstruction(capture: Pick<CapturePayload, 'rect' | 'target'
   const label = capture.target?.label;
   const it = label ? `‘${label}’을(를)` : '표시된 곳을';
   if (action?.kind === 'key') return `${action.keys} 키를 누르세요.`;
+  if (action?.kind === 'type' && !capture.rect) return '입력칸에 입력하세요.';
   if (!capture.rect) return '실습을 완료했습니다.';
   switch (action?.kind) {
     case 'double': return `${it} 더블클릭하세요.`;
     case 'right': return `${it} 마우스 오른쪽 버튼으로 클릭하세요.`;
     case 'drag': return `${it} 표시된 곳으로 끌어다 놓으세요.`;
+    case 'scroll': return `${{ up: '위로', down: '아래로', left: '왼쪽으로', right: '오른쪽으로' }[action.direction ?? 'down']} 스크롤하세요.`;
     case 'type':
       if (action.inputType === 'password') return '비밀번호 칸을 채우세요. (연습용 비밀번호 사용)';
       return label ? `‘${label}’ 칸에 입력하세요.` : '입력칸에 입력하세요.';
@@ -139,9 +145,13 @@ function stepFromCapture(input: NewStepInput): Step {
   const base = { id: newId('step'), assetId: input.assetId, instruction: input.instruction };
   const { action, rect } = input;
   if (action?.kind === 'key' && action.keys) return { ...base, type: 'key', keys: [action.keys], nextStepId: '' };
+  if (action?.kind === 'type' && !rect) {
+    return { ...base, type: 'input', nextStepId: '', input: { mode: 'text', placeholder: input.placeholder, acceptedValues: [], storeInput: false } };
+  }
   if (!rect) return { ...base, type: 'click', hotspots: [] };
   switch (action?.kind) {
     case 'drag': return { ...base, type: 'drag', from: rect, to: action.to ?? rect, nextStepId: '' };
+    case 'scroll': return { ...base, type: 'scroll', rect, direction: action.direction ?? 'down', nextStepId: '' };
     case 'type': return {
       ...base, type: 'input', rect, nextStepId: '',
       input: {

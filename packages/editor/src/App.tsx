@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { validateManifestGraph, type Manifest, type Step } from '@walksim/shared';
 import { parseCapturePayload } from './project';
 import { burnMasks } from './imaging';
-import { isExtensionPage, subscribeToCaptures, useEditorLock } from './captureSource';
+import { desktop, isExtensionPage, subscribeToCaptures, useEditorLock } from './captureSource';
+import { DesktopRecord } from './components/DesktopRecord';
 import { useInbox } from './inbox/useInbox';
 import { useProject, type SaveStatus } from './storage/useProject';
 import { InboxReview } from './components/InboxReview';
@@ -167,9 +168,12 @@ function App() {
                 {inbox.items.length}
               </span>
             </h2>
+            {desktop && canReceive && <DesktopRecord bridge={desktop} />}
             {inbox.items.length === 0 ? (
               <p className="text-xs text-gray-400 leading-relaxed">
-                {isExtensionPage
+                {desktop
+                  ? '녹화한 화면이 여기에 쌓입니다. 개인정보를 가린 뒤 승인하세요.'
+                  : isExtensionPage
                   ? '녹화할 탭에서 WalkSim 아이콘 → ‘녹화 시작’을 누르고 화면을 클릭하면 캡처가 여기에 쌓입니다.'
                   : '개발 모드: 레코더 확장의 캡처가 이 localhost 에디터로 전달됩니다.'}
               </p>

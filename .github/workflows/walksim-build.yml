@@ -1,0 +1,74 @@
+# WalkSim 설치 파일 자동 빌드
+#  - 데스크톱 앱: Windows(.exe 설치 파일), macOS(.dmg, Apple Silicon / Intel)
+#  - 크롬 확장 프로그램(에디터 포함): .zip
+# Actions 탭 → "WalkSim build" → Run workflow 로 수동 실행하거나, desktop-v* 태그를 올리면 Release까지 만든다.
+name: WalkSim build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['desktop-v*']
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+            files: packages/desktop/release/*.exe
+            name: WalkSim-Windows
+          - os: macos-latest
+            script: dist:mac
+            files: packages/desktop/release/*.dmg
+            name: WalkSim-macOS
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test -w @walksim/desktop
+      - run: npm run ${{ matrix.script }} -w @walksim/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:extension
+      - run: cd packages/recorder/dist && zip -r ../../../WalkSim-Chrome-Extension.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WalkSim-Chrome-Extension
+          path: WalkSim-Chrome-Extension.zip
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: [desktop, extension]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*

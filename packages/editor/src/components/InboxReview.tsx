@@ -20,6 +20,7 @@ function recordedLabel(item: InboxItem): string {
   if (a?.kind === 'key') return `${STEP_KIND_LABEL.key} ${a.keys}`;
   if (!item.rect) return STEP_KIND_LABEL.end;
   if (a?.kind === 'type') return a.inputType === 'password' ? '비밀번호 입력(연습용 비밀번호로 대체)' : STEP_KIND_LABEL.input;
+  if (a?.kind === 'scroll') return STEP_KIND_LABEL.scroll;
   return STEP_KIND_LABEL[a?.kind === 'double' || a?.kind === 'right' || a?.kind === 'drag' ? a.kind : 'click'];
 }
 
@@ -41,7 +42,13 @@ export function InboxReview({ item, position, total, busy, onChange, onApprove, 
         <ToolToggle tool={tool} onChange={setTool} options={captureTools(item.rect, item.action)} />
       </div>
 
-      {item.suggestedCount > 0 && (
+      {item.source === 'desktop' && (
+        <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2">
+          데스크톱 녹화는 화면 속 글자를 읽을 수 없어 이름·이메일·알림·파일명 같은 개인정보를 <b>자동으로 찾지 못합니다</b>
+          {item.suggestedCount > 0 ? ' (비밀번호 칸만 미리 가렸습니다)' : ''}. 화면 전체를 직접 확인하고 가려 주세요.
+        </div>
+      )}
+      {item.source !== 'desktop' && item.suggestedCount > 0 && (
         <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2">
           레코더가 입력창·이메일·전화번호 등 <b>민감정보 후보 {item.suggestedCount}곳</b>을 찾아 미리 가렸습니다.
           자동 탐지는 보조 수단일 뿐이니 이름·사진·알림·주소창 등 나머지도 직접 확인하세요.
