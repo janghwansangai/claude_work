@@ -1,11 +1,16 @@
 # 실습 녹화기 설치 파일 자동 빌드
 #  - 데스크톱 앱: Windows(.exe 설치 파일), macOS(.dmg, Apple Silicon / Intel)
 #  - 크롬 확장 프로그램(에디터 포함): .zip
-# Actions 탭 → "실습 녹화기 빌드" → Run workflow 로 수동 실행하거나, desktop-v* 태그를 올리면 Release까지 만든다.
+# Actions 탭 → "실습 녹화기 빌드" → Run workflow 로 수동 실행(release_tag를 적으면 그 태그로 Release까지 만든다)하거나, desktop-v* 태그를 올리면 Release까지 만든다.
 name: 실습 녹화기 빌드
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '릴리스로 올릴 버전 태그 (예: desktop-v1.0.0). 비워 두면 빌드만 합니다.'
+        required: false
+        default: ''
   push:
     tags: ['desktop-v*']
     # 작업 브랜치에 코드가 올라오면 설치 파일을 새로 만든다(Actions → 실행 기록 → Artifacts에서 내려받기).
@@ -62,7 +67,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    if: startsWith(github.ref, 'refs/tags/desktop-v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs: [desktop, extension]
     runs-on: ubuntu-latest
     permissions:
@@ -75,7 +80,10 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          name: 실습 녹화기 ${{ github.ref_name }}
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: 실습 녹화기 ${{ inputs.release_tag || github.ref_name }}
+          make_latest: true
           body_path: .github/release-notes.md
           files: |
             artifacts/*
