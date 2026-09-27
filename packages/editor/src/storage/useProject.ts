@@ -5,6 +5,7 @@ import {
   createInitialManifest,
   deleteStep as removeStep,
   replaceStepAsset,
+  newId,
   setStepRect as applyStepRect,
   type RectRole,
   type RecordedAction,
@@ -15,6 +16,8 @@ import {
   deleteProject,
   loadLastProject,
   loadProjectAssets,
+  loadProjectRecord,
+  type ProjectRecord,
   requestPersistentStorage,
   saveProject,
   type AssetRecord,
@@ -96,6 +99,20 @@ export function useProject() {
     if (dirtyRef.current) await persist().catch(() => {});
   }, [persist]);
 
+  // 저장된 프로젝트(와 이미지)를 화면 상태로 불러온다.
+  const applyRecord = useCallback((record: ProjectRecord, assets: AssetRecord[]) => {
+    revokeAllObjectUrls();
+    const restored: Record<string, StoredImage> = {};
+    for (const a of assets) restored[a.assetId] = registerImage(a.assetId, a.blob, a.width, a.height);
+    setManifest(record.manifest);
+    setSelectedStepId(
+      record.manifest.steps.some(s => s.id === record.selectedStepId)
+        ? record.selectedStepId
+        : record.manifest.steps[0]?.id ?? null,
+    );
+    setImages(restored);
+  }, [registerImage, revokeAllObjectUrls, setManifest, setSelectedStepId]);
+
   // 최초 로드: 마지막으로 작업한 프로젝트와 이미지를 IndexedDB에서 복원한다.
   useEffect(() => {
     let cancelled = false;
@@ -107,15 +124,7 @@ export function useProject() {
         if (record) {
           const assets = await loadProjectAssets(record.id);
           if (cancelled) return;
-          const restored: Record<string, StoredImage> = {};
-          for (const a of assets) restored[a.assetId] = registerImage(a.assetId, a.blob, a.width, a.height);
-          setManifest(record.manifest);
-          setSelectedStepId(
-            record.manifest.steps.some(s => s.id === record.selectedStepId)
-              ? record.selectedStepId
-              : record.manifest.steps[0]?.id ?? null,
-          );
-          setImages(restored);
+          applyRecord(record, assets);
         }
         setSaveStatus(record ? 'saved' : 'idle');
       } catch (err) {
@@ -129,7 +138,7 @@ export function useProject() {
       }
     })();
     return () => { cancelled = true; };
-  }, [registerImage, setManifest, setSelectedStepId]);
+  }, [applyRecord]);
 
   useEffect(() => revokeAllObjectUrls, [revokeAllObjectUrls]);
 
@@ -217,22 +226,53 @@ export function useProject() {
     await persist().catch(() => {});
   }, [persist, setManifest, setSelectedStepId]);
 
-  // 현재 프로젝트와 이미지를 이 브라우저에서 완전히 삭제하고 빈 프로젝트로 시작한다.
-  const resetProject = useCallback(async () => {
-    const oldId = manifestRef.current.id;
-    dirtyRef.current = false;
-    try {
-      await deleteProject(oldId);
-    } catch (err) {
-      console.error('프로젝트 삭제 실패:', err);
-      setSaveStatus('error');
-      return;
-    }
+  // 지금 프로젝트를 저장해 두고 빈 새 프로젝트를 시작한다(이전 프로젝트는 목록에 남는다).
+  const newProject = useCallback(async () => {
+    await flush();
     revokeAllObjectUrls();
     setImages({});
     setManifest(createInitialManifest());
     setSelectedStepId(null);
+  }, [flush, revokeAllObjectUrls, setManifest, setSelectedStepId]);
+
+  // 저장된 다른 프로젝트를 연다.
+  const openProject = useCallback(async (projectId: string) => {
+    if (projectId === manifestRef.current.id) return true;
+    await flush();
+    const record = await loadProjectRecord(projectId);
+    if (!record) return false;
+    applyRecord(record, await loadProjectAssets(projectId));
+    await persist().catch(() => {}); // "마지막으로 연 프로젝트"로 기록
+    return true;
+  }, [applyRecord, flush, persist]);
+
+  // 프로젝트와 그 이미지를 이 컴퓨터에서 지운다. 지금 열린 프로젝트면 빈 새 프로젝트로 바꾼다.
+  const removeProject = useCallback(async (projectId: string) => {
+    const current = projectId === manifestRef.current.id;
+    if (current) dirtyRef.current = false;
+    await deleteProject(projectId);
+    if (current) {
+      revokeAllObjectUrls();
+      setImages({});
+      setManifest(createInitialManifest());
+      setSelectedStepId(null);
+    }
   }, [revokeAllObjectUrls, setManifest, setSelectedStepId]);
+
+  // 프로젝트 파일에서 읽은 내용을 새 프로젝트로 저장하고 연다(같은 파일을 여러 번 열어도 덮어쓰지 않는다).
+  const importProject = useCallback(async (manifest: Manifest, assets: Omit<AssetRecord, 'projectId' | 'createdAt'>[], selectedStepId: string | null) => {
+    await flush();
+    const imported: Manifest = { ...manifest, id: newId('project') };
+    const records: AssetRecord[] = assets.map(a => ({ ...a, projectId: imported.id, createdAt: Date.now() }));
+    await saveProject(imported, selectedStepId, records);
+    applyRecord({ id: imported.id, manifest: imported, selectedStepId, updatedAt: Date.now() }, records);
+  }, [applyRecord, flush]);
+
+  // 프로젝트 파일로 저장할 때 쓰는 현재 이미지 목록
+  const currentAssets = useCallback(() => {
+    return Object.entries(images).map(([assetId, img]) => ({ assetId, blob: blobsRef.current.get(assetId)!, width: img.width, height: img.height }))
+      .filter(a => a.blob);
+  }, [images]);
 
   const getImageBlob = useCallback((assetId: string) => blobsRef.current.get(assetId), []);
 
@@ -249,6 +289,10 @@ export function useProject() {
     addMasksToStep,
     setStepRect,
     deleteStep,
-    resetProject,
+    newProject,
+    openProject,
+    removeProject,
+    importProject,
+    currentAssets,
   };
 }

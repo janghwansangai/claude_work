@@ -1,5 +1,5 @@
 import { zipSync, strToU8 } from 'fflate';
-import { validateManifest, validateManifestGraph, type Manifest, type Step } from '@walksim/shared';
+import { validateManifest, validateManifestGraph, type GraphIssue, type Manifest, type Step } from '@walksim/shared';
 
 // PRD §12.2 안전한 정적 내보내기.
 // ZIP에는 플레이어 + 검수된 manifest + 마스킹 완료 이미지(해시 파일명)만 들어간다.
@@ -20,23 +20,33 @@ function stepTexts(step: Step): string[] {
 }
 
 // 학생에게 보이는 모든 텍스트에서 개인정보 형태를 찾는다(보조 검사 — 이미지 확인은 교사가 직접).
-export function scanTextForPii(manifest: Manifest): string[] {
-  const findings: string[] = [];
-  const check = (where: string, text: string) => {
-    for (const [pattern, label] of PII_PATTERNS) if (pattern.test(text)) findings.push(`${where}에 ${label}로 보이는 글자가 있습니다.`);
+export function scanTextForPii(manifest: Manifest): GraphIssue[] {
+  const findings: GraphIssue[] = [];
+  const check = (text: string, where: string, step?: { id: string; n: number }) => {
+    for (const [pattern, label] of PII_PATTERNS) {
+      if (pattern.test(text)) {
+        findings.push({ level: 'error', stepId: step?.id, stepNumber: step?.n, message: `${step ? `${step.n}단계` : where}: ${label}로 보이는 글자가 있습니다.` });
+      }
+    }
   };
-  check('제목', manifest.title);
-  check('안내문', manifest.notice);
-  manifest.steps.forEach((s, i) => stepTexts(s).forEach(t => check(`${i + 1}단계`, t)));
+  check(manifest.title, '제목');
+  check(manifest.notice, '안내문');
+  manifest.steps.forEach((s, i) => stepTexts(s).forEach(t => check(t, '', { id: s.id, n: i + 1 })));
   return findings;
 }
 
-export function exportBlockers(manifest: Manifest, pendingInbox: number, missingImages: number): string[] {
-  const blockers: string[] = [];
-  if (pendingInbox > 0) blockers.push(`검수함에 승인되지 않은 캡처가 ${pendingInbox}개 있습니다.`);
-  if (missingImages > 0) blockers.push(`이미지가 없는 단계가 ${missingImages}개 있습니다. 다시 녹화하거나 삭제하세요.`);
-  blockers.push(...validateManifestGraph(manifest).errors, ...scanTextForPii(manifest));
-  return blockers;
+/** 내보내기 전 검사 결과. 단계와 관련된 문제는 stepId·stepNumber로 바로 찾아갈 수 있다. */
+export function exportIssues(manifest: Manifest, pendingInbox: number, hasImage: (assetId: string) => boolean): GraphIssue[] {
+  const issues: GraphIssue[] = [];
+  if (pendingInbox > 0) issues.push({ level: 'error', message: `검수함에 승인되지 않은 캡처가 ${pendingInbox}개 있습니다. 승인하거나 버려 주세요.` });
+  manifest.steps.forEach((s, i) => {
+    if (s.assetId && !hasImage(s.assetId)) {
+      issues.push({ level: 'error', stepId: s.id, stepNumber: i + 1, message: `${i + 1}단계: 이미지가 없습니다. 다시 녹화하거나 단계를 삭제하세요.` });
+    }
+  });
+  const graph = validateManifestGraph(manifest).issues.filter(g => !(g.message.includes('배경 이미지 파일이 프로젝트에 없습니다') && g.stepId && !hasImage(manifest.steps[(g.stepNumber ?? 1) - 1]?.assetId ?? '')));
+  issues.push(...graph, ...scanTextForPii(manifest));
+  return issues;
 }
 
 async function fetchPlayerFiles(): Promise<Record<string, Uint8Array>> {

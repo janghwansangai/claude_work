@@ -36,7 +36,7 @@ export function InboxReview({ item, position, total, busy, onChange, onApprove, 
           <p className="text-xs font-semibold text-amber-600">검수함 {position} / {total} · 아직 프로젝트에 들어가지 않음</p>
           <h2 className="text-lg font-bold text-gray-800">개인정보를 가린 뒤 승인하세요</h2>
           <p className="text-sm text-gray-500 mt-1">
-            이 원본은 암호화된 임시 보관함에만 있습니다(7일 뒤 자동 삭제). 승인하면 가림 상자가 픽셀에 구워진 이미지만 프로젝트에 저장되고 원본은 지워지며, 버리면 즉시 사라집니다.
+            이 원본은 이 컴퓨터에 암호화해 보관 중이며 학생용 ZIP에는 들어가지 않습니다. 승인하면 가림 상자가 픽셀에 구워진 이미지만 프로젝트에 저장되고 원본은 지워지며, 버리면 즉시 사라집니다.
           </p>
         </div>
         <ToolToggle tool={tool} onChange={setTool} options={captureTools(item.rect, item.action)} />

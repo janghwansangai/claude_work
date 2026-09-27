@@ -77,6 +77,22 @@ export async function loadLastProject(): Promise<ProjectRecord | undefined> {
   return record;
 }
 
+export interface ProjectSummary { id: string; title: string; steps: number; updatedAt: number }
+
+export async function listProjects(): Promise<ProjectSummary[]> {
+  const db = await getDB();
+  const all = await db.getAll('projects');
+  return all
+    .filter(r => isUsableManifest(r.manifest))
+    .map(r => ({ id: r.id, title: r.manifest.title, steps: r.manifest.steps.length, updatedAt: r.updatedAt }))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function loadProjectRecord(projectId: string): Promise<ProjectRecord | undefined> {
+  const record = await (await getDB()).get('projects', projectId);
+  return record && isUsableManifest(record.manifest) ? record : undefined;
+}
+
 export async function loadProjectAssets(projectId: string): Promise<AssetRecord[]> {
   const db = await getDB();
   return db.getAllFromIndex('assets', 'by-project', projectId);

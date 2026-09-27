@@ -142,58 +142,74 @@ export function stepAnchor(step: Step): Rect | undefined {
 
 export * from './keys';
 
+export interface GraphIssue {
+  level: 'error' | 'warning'; // error: 발행을 막아야 함, warning: 교사 확인 필요
+  stepId?: string;            // 문제가 있는 단계(있으면 편집기에서 바로 이동)
+  stepNumber?: number;        // 목록에서 보이는 단계 번호(1부터)
+  message: string;
+}
+
 export interface GraphReport {
-  errors: string[];   // 발행을 막아야 하는 문제
+  issues: GraphIssue[];
+  errors: string[];   // 발행을 막아야 하는 문제 (issues의 문구 모음)
   warnings: string[]; // 교사 확인이 필요한 문제
 }
 
 // PRD §9.2: 시작점·링크·자산 존재, 도달 불가 단계와 종료점 부재를 검사한다.
 export function validateManifestGraph(manifest: Manifest): GraphReport {
-  const errors: string[] = [];
-  const warnings: string[] = [];
+  const issues: GraphIssue[] = [];
+  const numberOf = new Map(manifest.steps.map((s, i) => [s.id, i + 1]));
+  const add = (level: GraphIssue['level'], message: string, stepId?: string) => {
+    const stepNumber = stepId ? numberOf.get(stepId) : undefined;
+    issues.push({ level, stepId, stepNumber, message: stepNumber ? `${stepNumber}단계: ${message}` : message });
+  };
   const ids = new Set<string>();
 
   for (const step of manifest.steps) {
-    if (ids.has(step.id)) errors.push(`단계 ID가 중복됩니다: ${step.id}`);
+    if (ids.has(step.id)) add('error', '단계 ID가 중복됩니다.', step.id);
     ids.add(step.id);
   }
   for (const step of manifest.steps) {
     if (step.type === 'input' && step.input.mode !== 'password-sample' && step.input.acceptedValues.length === 0) {
-      warnings.push(`${step.id}: 입력 단계에 정답 값이 없어 아무 값이나 통과합니다.`);
+      add('warning', '입력 단계에 정답 값이 없어 아무 값이나 통과합니다.', step.id);
     }
-    if (step.type === 'choice' && step.choices.length === 0) errors.push(`${step.id}: 선택지가 없습니다.`);
+    if (step.type === 'choice' && step.choices.length === 0) add('error', '선택지가 없습니다.', step.id);
   }
   if (manifest.steps.length === 0) {
-    errors.push('단계가 하나도 없습니다.');
-    return { errors, warnings };
-  }
-  if (!ids.has(manifest.startStepId)) errors.push(`시작 단계가 존재하지 않습니다: "${manifest.startStepId}"`);
+    add('error', '단계가 하나도 없습니다.');
+  } else {
+    if (!ids.has(manifest.startStepId)) add('error', '시작 단계가 지정되지 않았습니다.');
 
-  for (const step of manifest.steps) {
-    if (!step.assetId) warnings.push(`${step.id}: 배경 이미지가 없습니다.`);
-    else if (!(step.assetId in manifest.assets)) errors.push(`${step.id}: 자산 "${step.assetId}"이(가) assets에 없습니다.`);
-    for (const next of nextStepIds(step)) {
-      if (!next) errors.push(`${step.id}: 다음 단계가 연결되지 않은 동작이 있습니다.`);
-      else if (!ids.has(next)) errors.push(`${step.id}: 존재하지 않는 단계로 연결됩니다 (${next}).`);
+    for (const step of manifest.steps) {
+      if (!step.assetId) add('warning', '배경 이미지가 없습니다.', step.id);
+      else if (!(step.assetId in manifest.assets)) add('error', '배경 이미지 파일이 프로젝트에 없습니다.', step.id);
+      for (const next of nextStepIds(step)) {
+        if (!next) add('error', '성공하면 이동할 단계가 연결되지 않았습니다.', step.id);
+        else if (!ids.has(next)) add('error', '삭제된(존재하지 않는) 단계로 연결됩니다.', step.id);
+      }
     }
+
+    const byId = new Map(manifest.steps.map(s => [s.id, s]));
+    const reachable = new Set<string>();
+    const queue = ids.has(manifest.startStepId) ? [manifest.startStepId] : [];
+    let hasReachableEnd = false;
+    while (queue.length) {
+      const id = queue.pop()!;
+      if (reachable.has(id)) continue;
+      reachable.add(id);
+      const next = nextStepIds(byId.get(id)!).filter(n => byId.has(n));
+      if (nextStepIds(byId.get(id)!).length === 0) hasReachableEnd = true;
+      queue.push(...next);
+    }
+    for (const step of manifest.steps) {
+      if (!reachable.has(step.id)) add('warning', '시작 단계에서 이어지지 않아 학생이 볼 수 없습니다.', step.id);
+    }
+    if (reachable.size > 0 && !hasReachableEnd) add('warning', '도달 가능한 종료 단계(클릭 영역 없는 단계)가 없습니다.');
   }
 
-  const byId = new Map(manifest.steps.map(s => [s.id, s]));
-  const reachable = new Set<string>();
-  const queue = ids.has(manifest.startStepId) ? [manifest.startStepId] : [];
-  let hasReachableEnd = false;
-  while (queue.length) {
-    const id = queue.pop()!;
-    if (reachable.has(id)) continue;
-    reachable.add(id);
-    const next = nextStepIds(byId.get(id)!).filter(n => byId.has(n));
-    if (nextStepIds(byId.get(id)!).length === 0) hasReachableEnd = true;
-    queue.push(...next);
-  }
-  for (const step of manifest.steps) {
-    if (!reachable.has(step.id)) warnings.push(`${step.id}: 시작 단계에서 도달할 수 없습니다.`);
-  }
-  if (reachable.size > 0 && !hasReachableEnd) warnings.push('도달 가능한 종료 단계(클릭 영역 없는 단계)가 없습니다.');
-
-  return { errors, warnings };
+  return {
+    issues,
+    errors: issues.filter(i => i.level === 'error').map(i => i.message),
+    warnings: issues.filter(i => i.level === 'warning').map(i => i.message),
+  };
 }

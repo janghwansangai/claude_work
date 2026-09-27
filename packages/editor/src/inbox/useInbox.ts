@@ -5,7 +5,7 @@ import { draftInstruction, newId, type CapturePayload, type CaptureTarget, type 
 import { clearPending, deletePending, loadPending, savePending, updatePendingMeta, type PendingMeta } from '../storage/pendingStore';
 
 // 검수함(review inbox): 마스킹 전 원본 캡처.
-// 나중에 검수할 수 있도록 암호화해서 임시 보관하고(pendingStore), 승인·버리기 즉시 지운다. 7일 뒤 자동 삭제.
+// 나중에 검수할 수 있도록 암호화해서 보관하고(pendingStore), 승인·버리기 즉시 지운다.
 // 가림이 적용된 승인본만 프로젝트 저장소(IndexedDB walksim-editor)에 들어간다.
 export interface InboxItem {
   id: string;
@@ -20,12 +20,11 @@ export interface InboxItem {
   suggestedCount: number;
   instruction: string;
   timestamp: number;
-  expiresAt: number;
 }
 
 export type InboxStorage = 'loading' | 'saved' | 'memory-only';
 
-const metaOf = (item: InboxItem): PendingMeta => ({
+export const metaOf = (item: InboxItem): PendingMeta => ({
   rect: item.rect, viewport: item.viewport, target: item.target, action: item.action, source: item.source,
   masks: item.masks, suggestedCount: item.suggestedCount, instruction: item.instruction, timestamp: item.timestamp,
   mime: item.blob.type,
@@ -55,7 +54,7 @@ export function useInbox() {
     loadPending()
       .then(restored => {
         if (cancelled) return;
-        const fromStore: InboxItem[] = restored.map(r => ({ id: r.id, url: URL.createObjectURL(r.blob), blob: r.blob, expiresAt: r.expiresAt, ...r.meta }));
+        const fromStore: InboxItem[] = restored.map(r => ({ id: r.id, url: URL.createObjectURL(r.blob), blob: r.blob, ...r.meta }));
         const known = new Set(itemsRef.current.map(i => i.id));
         commit([...itemsRef.current, ...fromStore.filter(i => !known.has(i.id))].sort((a, b) => a.timestamp - b.timestamp));
         setStorage('saved');
@@ -80,7 +79,6 @@ export function useInbox() {
       suggestedCount: payload.suggestedMasks.length,
       instruction: draftInstruction(payload),
       timestamp: payload.timestamp,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
     };
     commit([...itemsRef.current, item].sort((a, b) => a.timestamp - b.timestamp));
     savePending(item.id, blob, metaOf(item)).catch(persistFailed);
@@ -106,6 +104,13 @@ export function useInbox() {
     deletePending(id).catch(persistFailed);
   }, [commit, persistFailed]);
 
+  /** 프로젝트 파일에서 불러온 검수 전 캡처를 검수함에 넣는다. */
+  const addRestored = useCallback((restored: { blob: Blob; meta: PendingMeta }[]) => {
+    const added: InboxItem[] = restored.map(r => ({ id: newId('capture'), url: URL.createObjectURL(r.blob), blob: r.blob, ...r.meta }));
+    commit([...itemsRef.current, ...added].sort((a, b) => a.timestamp - b.timestamp));
+    for (const item of added) savePending(item.id, item.blob, metaOf(item)).catch(persistFailed);
+  }, [commit, persistFailed]);
+
   const removeAll = useCallback(() => {
     itemsRef.current.forEach(i => { URL.revokeObjectURL(i.url); clearTimeout(metaTimers.current.get(i.id)); });
     metaTimers.current.clear();
@@ -123,5 +128,5 @@ export function useInbox() {
 
   useEffect(() => () => { itemsRef.current.forEach(i => URL.revokeObjectURL(i.url)); }, []);
 
-  return { items, storage, add, update, remove, removeAll };
+  return { items, storage, add, addRestored, update, remove, removeAll };
 }

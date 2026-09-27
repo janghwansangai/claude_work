@@ -7,11 +7,8 @@ import type { CaptureTarget, RecordedAction, Viewport } from '../project';
 //  - 이미지와 편집 정보를 AES-GCM 256비트로 암호화해 저장한다.
 //  - 암호화 키는 데스크톱 앱에서는 운영체제 보안 저장소(Windows DPAPI / macOS 키체인)로 감싸 두고,
 //    크롬 확장에서는 브라우저 밖으로 꺼낼 수 없는(non-extractable) 키로 둔다.
-//  - 7일이 지나면 검수하지 않았더라도 자동으로 지운다.
+//  - 승인하거나 버리면 즉시 지운다. (교사 PC에 보관하는 것은 허용 — 학생용 ZIP에는 절대 들어가지 않는다)
 // 네트워크로 보내는 코드를 이 모듈에 추가하지 말 것.
-
-export const PENDING_TTL_DAYS = 7;
-const TTL_MS = PENDING_TTL_DAYS * 24 * 60 * 60 * 1000;
 const DB_NAME = 'walksim-pending';
 
 export interface PendingMeta {
@@ -30,7 +27,7 @@ export interface PendingMeta {
 interface PendingRecord {
   id: string;
   createdAt: number;
-  expiresAt: number;
+  expiresAt?: number; // 예전 버전(7일 자동 삭제) 기록 호환용. 지금은 쓰지 않는다.
   imageIv: Uint8Array;
   image: ArrayBuffer;
   metaIv: Uint8Array;
@@ -115,7 +112,7 @@ export async function savePending(id: string, blob: Blob, meta: PendingMeta): Pr
   const [image, metaEnc] = await Promise.all([encrypt(await blob.arrayBuffer()), encrypt(encodeMeta(meta))]);
   const now = Date.now();
   const db = await getDB();
-  await db.put('items', { id, createdAt: now, expiresAt: now + TTL_MS, imageIv: image.iv, image: image.data, metaIv: metaEnc.iv, meta: metaEnc.data });
+  await db.put('items', { id, createdAt: now, imageIv: image.iv, image: image.data, metaIv: metaEnc.iv, meta: metaEnc.data });
 }
 
 export async function updatePendingMeta(id: string, meta: PendingMeta): Promise<void> {
@@ -134,19 +131,18 @@ export async function clearPending(): Promise<void> {
   await (await getDB()).clear('items');
 }
 
-export interface RestoredPending { id: string; blob: Blob; meta: PendingMeta; expiresAt: number }
+export interface RestoredPending { id: string; blob: Blob; meta: PendingMeta }
 
-/** 보관된 캡처를 복호화해 돌려준다. 기간이 지났거나 풀 수 없는 것은 지운다. */
+/** 보관된 캡처를 복호화해 돌려준다. 풀 수 없는 것(다른 PC·손상)은 지운다. */
 export async function loadPending(): Promise<RestoredPending[]> {
   const db = await getDB();
   const records = await db.getAll('items');
   const out: RestoredPending[] = [];
   for (const r of records) {
-    if (r.expiresAt < Date.now()) { await db.delete('items', r.id); continue; }
     try {
       const meta = JSON.parse(new TextDecoder().decode(await decrypt(r.metaIv, r.meta))) as PendingMeta;
       const blob = new Blob([await decrypt(r.imageIv, r.image)], { type: meta.mime });
-      out.push({ id: r.id, blob, meta, expiresAt: r.expiresAt });
+      out.push({ id: r.id, blob, meta });
     } catch {
       await db.delete('items', r.id);
     }

@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
-import { validateManifestGraph, type Manifest, type Step } from '@walksim/shared';
+import type { Step } from '@walksim/shared';
 import { parseCapturePayload } from './project';
 import { burnMasks } from './imaging';
 import { desktop, isExtensionPage, subscribeToCaptures, useEditorLock } from './captureSource';
 import { DesktopRecord } from './components/DesktopRecord';
-import { DeployGuide } from './components/DeployGuide';
-import { PENDING_TTL_DAYS } from './storage/pendingStore';
 
-const daysLeft = (expiresAt: number) => Math.max(1, Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
-import { useInbox } from './inbox/useInbox';
+import { metaOf, useInbox, type InboxItem } from './inbox/useInbox';
 import { useProject, type SaveStatus } from './storage/useProject';
 import { InboxReview } from './components/InboxReview';
 import { StepEditor } from './components/StepEditor';
-import { buildLessonZip, downloadBlob, exportBlockers, lessonSlug } from './export/exportZip';
+import { downloadBlob } from './export/exportZip';
+import { buildProjectFile, parseProjectFile, projectFileName } from './export/projectFile';
+import { ProjectsDialog } from './components/ProjectsDialog';
+import { SafetyPanel } from './components/SafetyPanel';
 
 const SAVE_STATUS_LABEL: Record<SaveStatus, { text: string; className: string }> = {
   loading: { text: '불러오는 중…', className: 'text-gray-400' },
@@ -31,6 +31,9 @@ function App() {
   const [view, setView] = useState<View>({ kind: 'step' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showProjects, setShowProjects] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<string | null>(null);
 
   const { manifest, selectedStepId, images, hydrated, saveStatus } = project;
   const canReceive = hydrated && lock === 'owner';
@@ -55,53 +58,86 @@ function App() {
   const stepIndex = manifest.steps.findIndex(s => s.id === selectedStepId);
   const selectedStep = manifest.steps[stepIndex];
 
-  const afterInboxItemGone = (id: string) => {
-    const rest = inbox.items.filter(i => i.id !== id);
-    setView(rest.length > 0 ? { kind: 'inbox', id: rest[0].id } : { kind: 'step' });
-  };
 
-  const approve = async () => {
-    if (!inboxItem) return;
+  // 캡처(들)를 지금 표시된 가림 상자·지시문 그대로 승인해 단계로 만든다(녹화 순서대로).
+  const approveItems = async (items: InboxItem[]) => {
+    const ordered = [...items].sort((a, b) => a.timestamp - b.timestamp);
+    const done = new Set<string>();
     setBusy(true);
     setError(null);
     try {
-      const image = await burnMasks(inboxItem.blob, inboxItem.masks);
-      inbox.remove(inboxItem.id);
-      afterInboxItemGone(inboxItem.id);
-      await project.addApprovedCapture({
-        image,
-        rect: inboxItem.rect,
-        action: inboxItem.action,
-        instruction: inboxItem.instruction,
-        viewport: inboxItem.viewport,
-        placeholder: inboxItem.target?.label,
-      });
+      for (const [i, item] of ordered.entries()) {
+        if (ordered.length > 1) setProgress(`승인하는 중… ${i + 1} / ${ordered.length}`);
+        const image = await burnMasks(item.blob, item.masks);
+        await project.addApprovedCapture({
+          image,
+          rect: item.rect,
+          action: item.action,
+          instruction: item.instruction,
+          viewport: item.viewport,
+          placeholder: item.target?.label,
+        });
+        inbox.remove(item.id);
+        done.add(item.id);
+      }
     } catch (err) {
       console.error(err);
-      setError('승인 처리 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      setError('승인 처리 중 오류가 발생했습니다. 남은 캡처는 검수함에 그대로 있습니다.');
     } finally {
       setBusy(false);
+      setProgress(null);
+      setSelected(prev => new Set([...prev].filter(id => !done.has(id))));
+      const rest = inbox.items.filter(i => !done.has(i.id));
+      setView(rest.length > 0 && ordered.length === 1 ? { kind: 'inbox', id: rest[0].id } : { kind: 'step' });
     }
   };
 
-  const discard = () => {
-    if (!inboxItem) return;
-    inbox.remove(inboxItem.id);
-    afterInboxItemGone(inboxItem.id);
+  const approve = () => { if (inboxItem) void approveItems([inboxItem]); };
+
+  const discardItems = (ids: string[]) => {
+    ids.forEach(id => inbox.remove(id));
+    setSelected(prev => new Set([...prev].filter(id => !ids.includes(id))));
+    const rest = inbox.items.filter(i => !ids.includes(i.id));
+    setView(rest.length > 0 ? { kind: 'inbox', id: rest[0].id } : { kind: 'step' });
+  };
+
+  const discard = () => { if (inboxItem) discardItems([inboxItem.id]); };
+
+  const selectedItems = inbox.items.filter(i => selected.has(i.id));
+  const toggleSelected = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const approveSelected = () => {
+    const n = selectedItems.length;
+    const ok = window.confirm(`선택한 ${n}개 캡처를 지금 그려진 가림 상자 그대로 승인합니다.\n\n${n}장 모두 이미지 전체를 확인했고, 가리지 않은 곳에 실제 개인정보가 없습니까?`);
+    if (ok) void approveItems(selectedItems);
+  };
+
+  const discardSelected = () => {
+    if (window.confirm(`선택한 ${selectedItems.length}개 캡처를 버릴까요? 되돌릴 수 없습니다.`)) discardItems(selectedItems.map(i => i.id));
+  };
+
+  const goToStep = (stepId: string) => { project.setSelectedStepId(stepId); setView({ kind: 'step' }); };
+
+  const saveProjectFile = async () => {
+    const file = await buildProjectFile(manifest, selectedStepId, project.currentAssets(), inbox.items.map(i => ({ blob: i.blob, meta: metaOf(i) })));
+    downloadBlob(file, projectFileName(manifest.title));
+  };
+
+  const openProjectFile = async (file: File) => {
+    const parsed = await parseProjectFile(file);
+    await project.importProject(parsed.manifest, parsed.assets, parsed.selectedStepId);
+    if (parsed.pending.length > 0) inbox.addRestored(parsed.pending);
+    setView({ kind: 'step' });
   };
 
   const updateSelectedStep = (updater: (step: Step) => Step) => {
     if (!selectedStep) return;
     const id = selectedStep.id;
     project.updateManifest(prev => ({ ...prev, steps: prev.steps.map(s => (s.id === id ? updater(s) : s)) }));
-  };
-
-  const handleReset = () => {
-    const ok = window.confirm('현재 프로젝트와 모든 이미지·검수함 캡처(임시 보관분 포함)를 이 컴퓨터에서 삭제하고 새로 시작합니다. 계속할까요?');
-    if (!ok) return;
-    inbox.removeAll();
-    setView({ kind: 'step' });
-    void project.resetProject();
   };
 
   const status = SAVE_STATUS_LABEL[saveStatus];
@@ -116,6 +152,24 @@ function App() {
               두 탭에서 동시에 편집하면 저장 내용이 서로 덮어써집니다. 다른 탭을 닫으면 이 탭에서 자동으로 이어서 편집할 수 있습니다.
             </p>
           </div>
+        </div>
+      )}
+
+      {showProjects && (
+        <ProjectsDialog
+          currentId={manifest.id}
+          currentTitle={manifest.title}
+          onClose={() => setShowProjects(false)}
+          onNew={async () => { await project.newProject(); setView({ kind: 'step' }); }}
+          onOpen={async id => { await project.openProject(id); setView({ kind: 'step' }); }}
+          onDelete={id => project.removeProject(id)}
+          onSaveFile={saveProjectFile}
+          onOpenFile={openProjectFile}
+        />
+      )}
+      {progress && (
+        <div className="fixed inset-0 z-40 bg-gray-900/40 flex items-center justify-center">
+          <div className="bg-white rounded-lg px-6 py-4 shadow-xl text-sm font-medium" role="status">{progress}</div>
         </div>
       )}
 
@@ -134,11 +188,11 @@ function App() {
         </div>
         <div className="flex gap-2 shrink-0">
           <button
-            onClick={handleReset}
+            onClick={() => setShowProjects(true)}
             disabled={!hydrated}
-            className="bg-white border border-gray-300 text-gray-600 px-4 py-1.5 rounded-md font-medium hover:bg-gray-100 transition text-sm disabled:opacity-50"
+            className="bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md font-medium hover:bg-gray-100 transition text-sm disabled:opacity-50"
           >
-            새 프로젝트
+            📁 프로젝트 (새로·열기·저장)
           </button>
           <button
             onClick={() => setView({ kind: 'safety' })}
@@ -177,7 +231,7 @@ function App() {
               <p className={`text-[11px] mb-2 leading-relaxed ${inbox.storage === 'memory-only' ? 'text-red-600' : 'text-gray-400'}`}>
                 {inbox.storage === 'memory-only'
                   ? '⚠ 임시 보관에 실패했습니다. 창을 닫으면 검수 전 캡처가 사라집니다.'
-                  : `🔒 암호화해 임시 보관 중 · 앱을 닫았다가 나중에 검수해도 됩니다 (${PENDING_TTL_DAYS}일 뒤 자동 삭제)`}
+                  : '🔒 이 컴퓨터에 암호화해 보관 중 · 앱을 닫았다가 나중에 검수해도 됩니다'}
               </p>
             )}
             {inbox.items.length === 0 ? (
@@ -190,20 +244,44 @@ function App() {
               </p>
             ) : (
               <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="flex items-center gap-1.5 text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.length === inbox.items.length}
+                      ref={el => { if (el) el.indeterminate = selectedItems.length > 0 && selectedItems.length < inbox.items.length; }}
+                      onChange={e => setSelected(e.target.checked ? new Set(inbox.items.map(i => i.id)) : new Set())}
+                    />
+                    전체 선택
+                  </label>
+                  {selectedItems.length > 0 && <span className="text-gray-500">{selectedItems.length}개 선택</span>}
+                </div>
+                {selectedItems.length > 0 && (
+                  <div className="flex gap-2">
+                    <button disabled={busy} onClick={approveSelected} className="flex-1 rounded-md bg-blue-600 text-white text-xs font-semibold py-1.5 disabled:opacity-50">
+                      선택 승인 ({selectedItems.length})
+                    </button>
+                    <button disabled={busy} onClick={discardSelected} className="flex-1 rounded-md border border-gray-300 text-gray-600 text-xs font-semibold py-1.5 disabled:opacity-50">
+                      선택 버리기
+                    </button>
+                  </div>
+                )}
                 {inbox.items.map((item, i) => (
-                  <button
+                  <div
                     key={item.id}
-                    onClick={() => setView({ kind: 'inbox', id: item.id })}
-                    className={`flex gap-2 items-center p-1.5 rounded border text-left ${view.kind === 'inbox' && view.id === item.id ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:bg-gray-50'}`}
+                    className={`flex gap-2 items-center p-1.5 rounded border ${view.kind === 'inbox' && view.id === item.id ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:bg-gray-50'}`}
                   >
-                    {/* 썸네일은 흐리게 표시해 검수 전 원본이 목록에서 그대로 보이지 않게 한다 */}
-                    <img src={item.url} alt="" className="w-16 h-10 object-cover rounded blur-sm" />
-                    <span className="text-xs">
-                      <span className="text-amber-600 font-semibold">검수 필요 #{i + 1}</span>
-                      <span className="block text-gray-500 truncate w-40">{item.instruction}</span>
-                      <span className="block text-[10px] text-gray-400">{daysLeft(item.expiresAt)}일 뒤 자동 삭제</span>
-                    </span>
-                  </button>
+                    <input type="checkbox" aria-label={`검수 필요 #${i + 1} 선택`} checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)} />
+                    <button onClick={() => setView({ kind: 'inbox', id: item.id })} className="flex gap-2 items-center text-left min-w-0">
+                      {/* 썸네일은 흐리게 표시해 검수 전 원본이 목록에서 그대로 보이지 않게 한다 */}
+                      <img src={item.url} alt="" className="w-14 h-9 object-cover rounded blur-sm shrink-0" />
+                      <span className="text-xs min-w-0">
+                        <span className="text-amber-600 font-semibold">검수 필요 #{i + 1}</span>
+                        {item.masks.length > 0 && <span className="text-gray-400"> · 가림 {item.masks.length}</span>}
+                        <span className="block text-gray-500 truncate">{item.instruction}</span>
+                      </span>
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -240,8 +318,10 @@ function App() {
             <SafetyPanel
               manifest={manifest}
               pendingInbox={inbox.items.length}
-              missingImages={manifest.steps.filter(s => !images[s.assetId]).length}
+              hasImage={assetId => !!images[assetId]}
               getImage={project.getImageBlob}
+              onGoToStep={goToStep}
+              onGoToInbox={() => inbox.items[0] && setView({ kind: 'inbox', id: inbox.items[0].id })}
             />
           ) : inboxItem ? (
             <InboxReview
@@ -275,76 +355,6 @@ function App() {
           )}
         </main>
       </div>
-    </div>
-  );
-}
-
-function SafetyPanel({ manifest, pendingInbox, missingImages, getImage }: {
-  manifest: Manifest; pendingInbox: number; missingImages: number; getImage: (assetId: string) => Blob | undefined;
-}) {
-  const [approved, setApproved] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
-  const errors = exportBlockers(manifest, pendingInbox, missingImages);
-  const { warnings } = validateManifestGraph(manifest);
-
-  const exportZip = async () => {
-    setExporting(true);
-    setResult(null);
-    try {
-      const zip = await buildLessonZip(manifest, getImage);
-      const name = `walksim-${(manifest.title.trim() || lessonSlug(manifest)).replace(/[\\/:*?"<>|\s]+/g, '_')}.zip`;
-      downloadBlob(zip, name);
-      setResult({ ok: true, text: `${name} (${(zip.size / 1024).toFixed(0)} KB)을 내려받았습니다. 압축을 푼 폴더를 정적 웹호스팅에 올리면 학생 주소는 …/play/${lessonSlug(manifest)}/ 입니다.` });
-    } catch (err) {
-      console.error(err);
-      setResult({ ok: false, text: err instanceof Error ? err.message : 'ZIP을 만들지 못했습니다.' });
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  return (
-    <div className="max-w-3xl w-full mx-auto bg-white rounded-lg shadow-sm border p-6 flex flex-col gap-4">
-      <h2 className="text-lg font-bold">안전 확인 · ZIP 내보내기</h2>
-      {errors.length === 0 && warnings.length === 0 && (
-        <p className="text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2 text-sm">자동 검사에서 문제를 찾지 못했습니다.</p>
-      )}
-      {errors.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-red-700 text-sm mb-1">내보내기 차단 ({errors.length})</h3>
-          <ul className="list-disc pl-5 text-sm text-red-700 space-y-0.5">{errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
-        </div>
-      )}
-      {warnings.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-amber-700 text-sm mb-1">확인 필요 ({warnings.length})</h3>
-          <ul className="list-disc pl-5 text-sm text-amber-700 space-y-0.5">{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
-        </div>
-      )}
-      <p className="text-xs text-gray-500">
-        자동 검사는 단계 연결·자산·텍스트 속 개인정보 형태만 확인합니다. 모든 이미지의 개인정보 여부는 교사가 직접 확인해야 합니다(PRD §12.2).
-      </p>
-
-      <div className="border-t pt-4 flex flex-col gap-3">
-        <label className="flex items-start gap-2 text-sm text-gray-700">
-          <input type="checkbox" className="w-4 h-4 mt-0.5" checked={approved} onChange={e => setApproved(e.target.checked)} disabled={errors.length > 0} />
-          {manifest.steps.length}개 단계의 이미지와 문구를 모두 다시 확인했고, 공개해도 되는 가상 자료만 있습니다.
-        </label>
-        <button
-          onClick={exportZip}
-          disabled={errors.length > 0 || !approved || exporting}
-          className="self-start bg-blue-600 text-white px-5 py-2 rounded-md font-medium hover:bg-blue-700 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {exporting ? 'ZIP 만드는 중…' : '학생용 ZIP 내려받기'}
-        </button>
-        {result && (
-          <p role="status" className={`text-sm rounded px-3 py-2 border ${result.ok ? 'text-green-800 bg-green-50 border-green-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
-            {result.text}
-          </p>
-        )}
-      </div>
-      <DeployGuide open={!!result?.ok} />
     </div>
   );
 }
