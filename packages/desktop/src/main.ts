@@ -115,6 +115,31 @@ async function resetPermissionsAndRelaunch() {
   app.exit(0);
 }
 
+// macOS는 앱이 실제로 화면을 찍으려고 시도해야 권한 목록에 앱을 올리고 허용 요청을 띄운다.
+// (1x1 같은 빈 요청은 실제 캡처가 일어나지 않아 목록에 나타나지 않을 수 있다)
+async function probeScreenCapture() {
+  await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 320, height: 200 } }).catch(() => []);
+}
+
+// DMG 창에서 바로 실행하면 macOS가 매번 임시 위치(App Translocation)에서 실행해 권한이 유지되지 않는다.
+async function offerMoveToApplications() {
+  if (process.platform !== 'darwin' || !app.isPackaged || app.isInApplicationsFolder()) return;
+  const { response } = await dialog.showMessageBox({
+    type: 'question',
+    buttons: ['응용 프로그램 폴더로 옮기기 (권장)', '나중에'],
+    defaultId: 0,
+    cancelId: 1,
+    message: 'WalkSim을 응용 프로그램 폴더로 옮길까요?',
+    detail: '다운로드 폴더나 설치 디스크(DMG) 창에서 바로 실행하면 macOS가 화면 기록 권한을 기억하지 못합니다. 옮긴 뒤 자동으로 다시 시작합니다.',
+  });
+  if (response !== 0) return;
+  try {
+    app.moveToApplicationsFolder();
+  } catch (err) {
+    await dialog.showMessageBox({ type: 'warning', message: '옮기지 못했습니다', detail: `Finder에서 WalkSim을 응용 프로그램 폴더로 끌어다 놓은 뒤 그곳에서 실행하세요.\n(${(err as Error).message})` });
+  }
+}
+
 type PermissionChoice = 'reset' | 'settings' | 'continue' | 'cancel';
 
 async function askAboutPermission(kind: 'screen' | 'input'): Promise<PermissionChoice> {
@@ -132,6 +157,8 @@ async function askAboutPermission(kind: 'screen' | 'input'): Promise<PermissionC
       '',
       '이미 켜져 있는데도 이 메시지가 보이면, 새 버전을 설치하면서 macOS가 예전 권한을 새 앱에 적용하지 않은 것입니다.',
       '‘권한 다시 설정’을 누르면 WalkSim의 예전 권한 기록을 지우고 앱을 다시 시작합니다.',
+      '',
+      '설정 목록에 WalkSim이 보이지 않으면: 목록 아래 「+」를 눌러 응용 프로그램 폴더의 WalkSim을 추가하고 켠 뒤, WalkSim을 다시 실행하세요.',
     ].join('\n'),
   });
   return (['reset', 'settings', 'continue', 'cancel'] as const)[response] ?? 'cancel';
@@ -141,7 +168,7 @@ async function ensurePermissions(): Promise<string | null> {
   if (process.platform !== 'darwin') return null;
 
   if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
-    await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } }).catch(() => []); // 권한 요청·설정 목록 등록
+    await probeScreenCapture(); // 권한 요청 창·설정 목록 등록
     const choice = await askAboutPermission('screen');
     if (choice === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
     if (choice === 'settings') {
@@ -153,7 +180,7 @@ async function ensurePermissions(): Promise<string | null> {
   }
 
   if (!systemPreferences.isTrustedAccessibilityClient(false)) {
-    systemPreferences.isTrustedAccessibilityClient(true); // macOS 안내 창 표시
+    systemPreferences.isTrustedAccessibilityClient(true); // macOS 안내 창 표시(손쉬운 사용 목록에도 등록된다)
     const choice = await askAboutPermission('input');
     if (choice === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
     if (choice === 'settings') {
@@ -500,7 +527,8 @@ function restrictPermissions() {
   session.defaultSession.setPermissionCheckHandler((wc, permission) => permission === 'media' && !!wc && mediaAllowed.has(wc.id));
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await offerMoveToApplications();
   serveApp();
   restrictPermissions();
   registerIpc();
