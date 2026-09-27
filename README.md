@@ -51,8 +51,8 @@
 👉 자세한 안내서: [docs/zip-guide.md](docs/zip-guide.md) (ZIP 안의 `README.txt`, 에디터의 ZIP 내보내기 화면에도 같은 안내가 있습니다)
 
 ZIP 파일을 더블클릭해서는 열리지 않습니다. 웹서버에 올려야 합니다.
-- **Cloudflare Pages(무료)**: dash.cloudflare.com → Workers & Pages → Create → Pages → **Upload assets** → 프로젝트 이름 입력 → ZIP 끌어다 놓기 → Deploy
-- 학생 주소: `https://<프로젝트>.pages.dev` (QR 코드: 크롬 공유 메뉴 → QR 코드 만들기)
+- **Cloudflare(무료)**: dash.cloudflare.com 로그인 → 계정 홈의 **Ship something new**(“Drop a folder, or a zip”) 칸에 ZIP을 그대로 끌어다 놓기 → 안내에 따라 배포 ([그림 안내](docs/zip-guide.md#2-학생에게-나눠-주기--cloudflare-무료-추천))
+- 학생 주소: 배포 후 생긴 `https://이름.내계정.workers.dev` 주소를 **그대로** 주면 됩니다(첫 화면이 실습으로 자동 이동). QR 코드: 크롬 공유 메뉴 → QR 코드 만들기
 - 수정 후에는 같은 프로젝트에서 **Create deployment**로 새 ZIP을 올리면 주소는 그대로입니다.
 - 공개 링크이므로 **가상 자료만** 올리세요.
 

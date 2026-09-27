@@ -140,53 +140,42 @@ async function offerMoveToApplications() {
   }
 }
 
-type PermissionChoice = 'reset' | 'settings' | 'cancel';
+type PermissionChoice = 'ok' | 'reset';
 
+// macOS가 직접 띄우는 권한 요청 창(‘시스템 설정 열기’)이 새로 설치한 앱을 정확히 가리키므로 그 창을 쓰도록 안내한다.
+// (우리 쪽 ‘설정 열기’로 가면 새 앱이 목록에 없을 수 있어 혼란스러우므로 두지 않는다)
 async function askAboutPermission(kind: 'screen' | 'input'): Promise<PermissionChoice> {
-  const screenText = '시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음';
-  const inputText = '시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용(및 입력 모니터링)';
+  const where = kind === 'screen' ? '화면 및 시스템 오디오 녹음' : '손쉬운 사용';
   const { response } = await dialog.showMessageBox({
-    type: 'warning',
-    buttons: ['권한 다시 설정 (권장)', '설정 열기', '취소'],
+    type: 'info',
+    buttons: ['확인', '권한 다시 설정'],
     defaultId: 0,
-    cancelId: 2,
-    message: kind === 'screen' ? '화면 기록 권한이 확인되지 않습니다' : '손쉬운 사용 권한이 확인되지 않습니다',
+    cancelId: 0,
+    message: kind === 'screen' ? '화면 기록 권한이 필요합니다' : '손쉬운 사용 권한이 필요합니다',
     detail: [
-      `${kind === 'screen' ? screenText : inputText}에서 WalkSim을 켜야 합니다.`,
-      ...(kind === 'input' ? ['클릭·키 입력의 “종류”만 기록하며, 입력한 글자 내용은 기록하지 않습니다.'] : []),
+      `macOS가 띄운 안내 창에서 ‘시스템 설정 열기’를 누르고, ${where} 목록에서 WalkSim을 켜 주세요.`,
+      '그다음 WalkSim을 종료(⌘Q)했다가 다시 실행하면 녹화할 수 있습니다.',
+      ...(kind === 'input' ? ['', '클릭·키 입력의 “종류”만 기록하며, 입력한 글자 내용은 기록하지 않습니다.'] : []),
       '',
-      '이미 켜져 있는데도 이 메시지가 보이면, 새 버전을 설치하면서 macOS가 예전 권한을 새 앱에 적용하지 않은 것입니다.',
-      '‘권한 다시 설정’을 누르면 WalkSim의 예전 권한 기록을 지우고 앱을 다시 시작합니다.',
-      '',
-      '설정 목록에 WalkSim이 보이지 않으면: 목록 아래 「+」를 눌러 응용 프로그램 폴더의 WalkSim을 추가하고 켠 뒤, WalkSim을 다시 실행하세요.',
+      '이미 켜져 있는데도 이 메시지가 계속 보이면(새 버전을 설치한 경우) ‘권한 다시 설정’을 누르세요. 예전 권한 기록을 지우고 앱을 다시 시작합니다.',
     ].join('\n'),
   });
-  return (['reset', 'settings', 'cancel'] as const)[response] ?? 'cancel';
+  return response === 1 ? 'reset' : 'ok';
 }
 
 async function ensurePermissions(): Promise<string | null> {
   if (process.platform !== 'darwin') return null;
 
   if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
-    await probeScreenCapture(); // 권한 요청 창·설정 목록 등록
-    const choice = await askAboutPermission('screen');
-    if (choice === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
-    if (choice === 'settings') {
-      void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-      return '화면 기록 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
-    }
-    return '녹화를 취소했습니다.';
+    await probeScreenCapture(); // macOS 권한 요청 창을 띄우고 설정 목록에 WalkSim을 올린다
+    if (await askAboutPermission('screen') === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
+    return '화면 기록 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
   }
 
   if (!systemPreferences.isTrustedAccessibilityClient(false)) {
-    systemPreferences.isTrustedAccessibilityClient(true); // macOS 안내 창 표시(손쉬운 사용 목록에도 등록된다)
-    const choice = await askAboutPermission('input');
-    if (choice === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
-    if (choice === 'settings') {
-      void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
-      return '손쉬운 사용 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
-    }
-    return '녹화를 취소했습니다.';
+    systemPreferences.isTrustedAccessibilityClient(true); // macOS 권한 요청 창(손쉬운 사용 목록에도 등록된다)
+    if (await askAboutPermission('input') === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
+    return '손쉬운 사용 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
   }
   return null;
 }

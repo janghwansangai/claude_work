@@ -128,15 +128,17 @@ function deployReadme(slug: string, title: string): string {
 
 ※ ZIP이나 index.html을 더블클릭하면 동작하지 않습니다. 반드시 웹 주소로 여세요.
 
-[1] 학생에게 나눠 주기 — Cloudflare Pages (무료, 추천)
-  1. https://dash.cloudflare.com 가입·로그인
-  2. Workers & Pages → Create(생성) → Pages → Upload assets(에셋 업로드)
-  3. 프로젝트 이름 입력 (예: walksim-${slug.replace(/^project-/, '')})  ※ 학교·학생 이름은 넣지 마세요
-  4. 이 ZIP 파일을 그대로 끌어다 놓기 → Deploy site(배포)
-  5. 학생 주소: https://<프로젝트이름>.pages.dev
-     (이 실습 페이지 주소: https://<프로젝트이름>.pages.dev/play/${slug}/)
+[1] 학생에게 나눠 주기 — Cloudflare (무료, 추천)
+  1. https://dash.cloudflare.com 가입·로그인 (신용카드 불필요)
+  2. 계정 홈 화면 가운데 "Ship something new" 칸 ("Drop a folder, or a zip")에
+     이 ZIP 파일을 그대로 끌어다 놓고, 안내에 따라 배포(Deploy)합니다.
+  3. 배포가 끝나면 https://무작위이름.내계정.workers.dev 같은 주소가 생깁니다.
+     그 주소를 그대로 학생에게 주세요. 첫 화면이 실습으로 자동 이동합니다.
+     (참고: 실습 페이지 위치는 주소 뒤 /play/${slug}/ 이지만, 학생에게는 기본 주소만 주면 됩니다)
   - QR 코드: 크롬에서 주소를 연 뒤 주소창 오른쪽 공유 아이콘 → QR 코드 만들기
-  - 수정할 때: 에디터에서 다시 ZIP 내보내기 → 같은 프로젝트에서 Create deployment → 새 ZIP 올리기 (주소는 그대로)
+  - 고쳤을 때: 에디터에서 다시 ZIP 내보내기 → 같은 칸에 새 ZIP 올리기 → 새 주소 안내
+  - 올린 사이트 목록·삭제: Cloudflare 왼쪽 메뉴 "컴퓨트"
+  - 화면이 바뀌었으면 계정 홈에서 "Drop a folder, or a zip" 또는 "Create app"을 찾으세요.
 
 [2] 수업 모드 (주소 끝에 붙이면 바로 시작)
   ?mode=guide       안내 모드 — 누를 곳이 반짝이고 설명이 옆에 나옴
@@ -154,8 +156,8 @@ function deployReadme(slug: string, title: string): string {
   4. 브라우저에서 http://localhost:8080 열기 (끝낼 때 Ctrl+C)
 
 [주의]
-  - Cloudflare Pages 주소는 링크만 알면 누구나 볼 수 있는 공개 사이트입니다. 가상 자료만 올리세요.
+  - Cloudflare 주소(workers.dev 등)는 링크만 알면 누구나 볼 수 있는 공개 사이트입니다. 가상 자료만 올리세요.
   - 실습 입력칸에 실제 이름·비밀번호를 넣지 말라고 학생에게 안내하세요.
-  - 내리려면: Cloudflare → 프로젝트 → Settings → Delete project
+  - 내리려면: Cloudflare 왼쪽 메뉴 "컴퓨트"에서 해당 사이트를 열어 삭제
 `;
 }

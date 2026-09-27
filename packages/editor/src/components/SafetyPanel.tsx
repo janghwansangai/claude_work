@@ -96,7 +96,7 @@ export function SafetyPanel({ manifest, pendingInbox, hasImage, getImage, onGoTo
         {result?.ok && (
           <div role="status" className="text-sm rounded px-3 py-2 border text-green-800 bg-green-50 border-green-200 leading-relaxed">
             <b>{result.name}</b> ({((result.size ?? 0) / 1024).toFixed(0)} KB)을 내려받았습니다.<br />
-            이 ZIP 파일을 Cloudflare에 그대로 올리면 <b>주소가 하나 생깁니다</b>(예: <code>https://이름.workers.dev</code> 또는 <code>https://이름.pages.dev</code>).
+            이 ZIP 파일을 Cloudflare에 그대로 올리면 <b>주소가 하나 생깁니다</b>(예: <code>https://falling-surf-db6b.내계정.workers.dev</code>).
             <b> 그 주소를 그대로 학생에게 주면</b> 첫 화면이 실습으로 자동 이동합니다. 아래 안내를 참고하세요.
           </div>
         )}
