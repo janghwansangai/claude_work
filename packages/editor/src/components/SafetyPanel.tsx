@@ -26,7 +26,7 @@ export function SafetyPanel({ manifest, pendingInbox, hasImage, getImage, onGoTo
     setResult(null);
     try {
       const zip = await buildLessonZip(manifest, getImage);
-      const name = `walksim-${(manifest.title.trim() || '실습').replace(/[\\/:*?"<>|\s]+/g, '_')}.zip`;
+      const name = `학생용-${(manifest.title.trim() || '실습').replace(/[\\/:*?"<>|\s]+/g, '_')}.zip`;
       downloadBlob(zip, name);
       setResult({ ok: true, name, size: zip.size });
     } catch (err) {

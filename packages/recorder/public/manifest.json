@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "WalkSim Recorder",
+  "name": "실습 녹화기",
   "version": "1.1.0",
-  "description": "WalkSim 2.0 화면 녹화기 + 로컬 편집기",
+  "description": "수업용 모의 실습을 만드는 화면 녹화기 + 로컬 편집기",
   "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
@@ -13,7 +13,7 @@
   "host_permissions": [],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "WalkSim Recorder",
+    "default_title": "실습 녹화기",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"

@@ -71,7 +71,7 @@ function StartScreen({ manifest, suggested, onStart }: { manifest: Manifest; sug
     <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
       <div className="bg-white text-gray-900 rounded-2xl shadow-xl max-w-lg w-full p-6 sm:p-8 flex flex-col gap-5">
         <div>
-          <p className="text-xs font-semibold text-blue-600 mb-1">WalkSim 모의 실습</p>
+          <p className="text-xs font-semibold text-blue-600 mb-1">모의 실습</p>
           <h1 className="text-2xl font-bold">{manifest.title}</h1>
         </div>
         <p className="bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-lg px-4 py-3">

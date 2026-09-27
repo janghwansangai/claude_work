@@ -19,6 +19,8 @@ const UI_DIR = path.join(__dirname, 'ui');
 const EDITOR_URL = 'walksim://app/editor/index.html';
 
 // 테스트·여러 교사 프로필용: 데이터 폴더를 따로 지정할 수 있다.
+// 표시 이름(productName)은 ‘실습 녹화기’지만 데이터 폴더·키체인 항목은 package.json의 name(@walksim/desktop)을 따르므로
+// 이름을 바꿔도 저장된 프로젝트와 검수 전 캡처가 그대로 남는다.
 if (process.env.WALKSIM_USER_DATA) app.setPath('userData', process.env.WALKSIM_USER_DATA);
 
 protocol.registerSchemesAsPrivileged([
@@ -72,7 +74,7 @@ function createEditor() {
   editorWin = new BrowserWindow({
     width: 1400,
     height: 900,
-    title: 'WalkSim',
+    title: '실습 녹화기',
     webPreferences: { preload: path.join(__dirname, 'preload-editor.js'), contextIsolation: true, sandbox: true },
   });
   lockDown(editorWin, 'walksim://app/');
@@ -108,8 +110,8 @@ async function resetPermissionsAndRelaunch() {
   })));
   await dialog.showMessageBox({
     type: 'info',
-    message: 'WalkSim의 예전 권한 기록을 지웠습니다',
-    detail: '앱이 다시 시작됩니다. 다시 ‘화면 녹화 시작’을 누르고, macOS가 묻는 화면 기록·손쉬운 사용 권한을 허용하세요.\n권한을 허용한 뒤 macOS가 “종료 후 다시 열기”를 요구하면 WalkSim을 한 번 더 다시 실행하면 됩니다.',
+    message: '실습 녹화기의 예전 권한 기록을 지웠습니다',
+    detail: '앱이 다시 시작됩니다. 다시 ‘화면 녹화 시작’을 누르고, macOS가 묻는 화면 기록·손쉬운 사용 권한을 허용하세요.\n권한을 허용한 뒤 macOS가 “종료 후 다시 열기”를 요구하면 실습 녹화기를 한 번 더 다시 실행하면 됩니다.',
   });
   app.relaunch();
   app.exit(0);
@@ -129,14 +131,14 @@ async function offerMoveToApplications() {
     buttons: ['응용 프로그램 폴더로 옮기기 (권장)', '나중에'],
     defaultId: 0,
     cancelId: 1,
-    message: 'WalkSim을 응용 프로그램 폴더로 옮길까요?',
+    message: '실습 녹화기를 응용 프로그램 폴더로 옮길까요?',
     detail: '다운로드 폴더나 설치 디스크(DMG) 창에서 바로 실행하면 macOS가 화면 기록 권한을 기억하지 못합니다. 옮긴 뒤 자동으로 다시 시작합니다.',
   });
   if (response !== 0) return;
   try {
     app.moveToApplicationsFolder();
   } catch (err) {
-    await dialog.showMessageBox({ type: 'warning', message: '옮기지 못했습니다', detail: `Finder에서 WalkSim을 응용 프로그램 폴더로 끌어다 놓은 뒤 그곳에서 실행하세요.\n(${(err as Error).message})` });
+    await dialog.showMessageBox({ type: 'warning', message: '옮기지 못했습니다', detail: `Finder에서 실습 녹화기를 응용 프로그램 폴더로 끌어다 놓은 뒤 그곳에서 실행하세요.\n(${(err as Error).message})` });
   }
 }
 
@@ -153,8 +155,8 @@ async function askAboutPermission(kind: 'screen' | 'input'): Promise<PermissionC
     cancelId: 0,
     message: kind === 'screen' ? '화면 기록 권한이 필요합니다' : '손쉬운 사용 권한이 필요합니다',
     detail: [
-      `macOS가 띄운 안내 창에서 ‘시스템 설정 열기’를 누르고, ${where} 목록에서 WalkSim을 켜 주세요.`,
-      '그다음 WalkSim을 종료(⌘Q)했다가 다시 실행하면 녹화할 수 있습니다.',
+      `macOS가 띄운 안내 창에서 ‘시스템 설정 열기’를 누르고, ${where} 목록에서 실습 녹화기를 켜 주세요.`,
+      '그다음 실습 녹화기를 종료(⌘Q)했다가 다시 실행하면 녹화할 수 있습니다.',
       ...(kind === 'input' ? ['', '클릭·키 입력의 “종류”만 기록하며, 입력한 글자 내용은 기록하지 않습니다.'] : []),
       '',
       '이미 켜져 있는데도 이 메시지가 계속 보이면(새 버전을 설치한 경우) ‘권한 다시 설정’을 누르세요. 예전 권한 기록을 지우고 앱을 다시 시작합니다.',
@@ -167,15 +169,15 @@ async function ensurePermissions(): Promise<string | null> {
   if (process.platform !== 'darwin') return null;
 
   if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
-    await probeScreenCapture(); // macOS 권한 요청 창을 띄우고 설정 목록에 WalkSim을 올린다
+    await probeScreenCapture(); // macOS 권한 요청 창을 띄우고 설정 목록에 실습 녹화기를 올린다
     if (await askAboutPermission('screen') === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
-    return '화면 기록 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
+    return '화면 기록 권한을 켠 뒤 실습 녹화기를 다시 실행하세요.';
   }
 
   if (!systemPreferences.isTrustedAccessibilityClient(false)) {
     systemPreferences.isTrustedAccessibilityClient(true); // macOS 권한 요청 창(손쉬운 사용 목록에도 등록된다)
     if (await askAboutPermission('input') === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
-    return '손쉬운 사용 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
+    return '손쉬운 사용 권한을 켠 뒤 실습 녹화기를 다시 실행하세요.';
   }
   return null;
 }

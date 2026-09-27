@@ -119,7 +119,7 @@ export function downloadBlob(blob: Blob, fileName: string) {
 }
 
 function deployReadme(slug: string, title: string): string {
-  return `WalkSim 학생용 실습 — ${title}
+  return `실습 녹화기 학생용 실습 — ${title}
 ==========================================
 
 이 ZIP은 학생용 실습 웹사이트 전체입니다. 로그인·서버 없이 동작하고,

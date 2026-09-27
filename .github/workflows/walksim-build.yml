@@ -1,8 +1,8 @@
-# WalkSim 설치 파일 자동 빌드
+# 실습 녹화기 설치 파일 자동 빌드
 #  - 데스크톱 앱: Windows(.exe 설치 파일), macOS(.dmg, Apple Silicon / Intel)
 #  - 크롬 확장 프로그램(에디터 포함): .zip
-# Actions 탭 → "WalkSim build" → Run workflow 로 수동 실행하거나, desktop-v* 태그를 올리면 Release까지 만든다.
-name: WalkSim build
+# Actions 탭 → "실습 녹화기 빌드" → Run workflow 로 수동 실행하거나, desktop-v* 태그를 올리면 Release까지 만든다.
+name: 실습 녹화기 빌드
 
 on:
   workflow_dispatch:
@@ -21,11 +21,11 @@ jobs:
           - os: windows-latest
             script: dist:win
             files: packages/desktop/release/*.exe
-            name: WalkSim-Windows
+            name: 실습녹화기-Windows
           - os: macos-latest
             script: dist:mac
             files: packages/desktop/release/*.dmg
-            name: WalkSim-macOS
+            name: 실습녹화기-macOS
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -54,11 +54,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:extension
-      - run: cd packages/recorder/dist && zip -r ../../../WalkSim-Chrome-Extension.zip .
+      - run: cd packages/recorder/dist && zip -r ../../../실습녹화기-크롬확장.zip .
       - uses: actions/upload-artifact@v4
         with:
-          name: WalkSim-Chrome-Extension
-          path: WalkSim-Chrome-Extension.zip
+          name: 실습녹화기-크롬확장
+          path: 실습녹화기-크롬확장.zip
           if-no-files-found: error
 
   release:

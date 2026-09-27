@@ -59,18 +59,18 @@ export async function parseProjectFile(file: File): Promise<ParsedProject> {
   try {
     entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
   } catch {
-    throw new Error('WalkSim 프로젝트 파일이 아닙니다. (학생용 ZIP이 아니라 ‘파일로 저장’한 .walksim 파일을 여세요)');
+    throw new Error('실습 녹화기 프로젝트 파일이 아닙니다. (학생용 ZIP이 아니라 ‘파일로 저장’한 .walksim 파일을 여세요)');
   }
   if (Object.keys(entries).length > MAX_FILES) throw new Error('파일이 너무 많습니다.');
   const raw = entries['project.json'];
   if (!raw) {
     throw new Error(entries['index.html']
       ? '학생용 ZIP은 편집용으로 열 수 없습니다. ‘파일로 저장’한 .walksim 파일을 여세요.'
-      : 'WalkSim 프로젝트 파일이 아닙니다.');
+      : '실습 녹화기 프로젝트 파일이 아닙니다.');
   }
   const json = JSON.parse(strFromU8(raw)) as Partial<ProjectJson>;
-  if (json.format !== FORMAT || typeof json.formatVersion !== 'number') throw new Error('WalkSim 프로젝트 파일이 아닙니다.');
-  if (json.formatVersion > FORMAT_VERSION) throw new Error('더 새로운 버전의 WalkSim에서 만든 파일입니다. WalkSim을 업데이트하세요.');
+  if (json.format !== FORMAT || typeof json.formatVersion !== 'number') throw new Error('실습 녹화기 프로젝트 파일이 아닙니다.');
+  if (json.formatVersion > FORMAT_VERSION) throw new Error('더 새로운 버전의 실습 녹화기에서 만든 파일입니다. 실습 녹화기를 업데이트하세요.');
   const manifest = validateManifest(json.manifest);
 
   const readImage = (path: string): Blob => {

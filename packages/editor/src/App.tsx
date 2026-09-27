@@ -175,7 +175,7 @@ function App() {
 
       <header className="bg-white border-b px-6 py-3 flex flex-wrap items-center justify-between shadow-sm z-10 gap-3">
         <div className="flex items-center gap-4 min-w-0">
-          <h1 className="text-xl font-bold text-blue-600 shrink-0">WalkSim Editor</h1>
+          <h1 className="text-xl font-bold text-blue-600 shrink-0">실습 녹화기</h1>
           <input
             type="text"
             aria-label="프로젝트 제목"
@@ -239,7 +239,7 @@ function App() {
                 {desktop
                   ? '녹화한 화면이 여기에 쌓입니다. 개인정보를 가린 뒤 승인하세요.'
                   : isExtensionPage
-                  ? '녹화할 탭에서 WalkSim 아이콘 → ‘녹화 시작’을 누르고 화면을 클릭하면 캡처가 여기에 쌓입니다.'
+                  ? '녹화할 탭에서 실습 녹화기 아이콘 → ‘녹화 시작’을 누르고 화면을 클릭하면 캡처가 여기에 쌓입니다.'
                   : '개발 모드: 레코더 확장의 캡처가 이 localhost 에디터로 전달됩니다.'}
               </p>
             ) : (

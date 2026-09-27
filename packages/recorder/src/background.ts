@@ -210,7 +210,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
       setBadge(tabId, 'REC');
     } catch {
       setBadge(tabId, '!');
-      chrome.action.setTitle({ tabId, title: 'WalkSim: 페이지가 바뀌어 녹화가 멈췄습니다. 아이콘을 눌러 계속하세요.' }).catch(() => {});
+      chrome.action.setTitle({ tabId, title: '실습 녹화기: 페이지가 바뀌어 녹화가 멈췄습니다. 아이콘을 눌러 계속하세요.' }).catch(() => {});
     }
   }
 });
