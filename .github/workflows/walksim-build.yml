@@ -68,10 +68,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
+          name: 실습 녹화기 ${{ github.ref_name }}
+          body_path: .github/release-notes.md
+          files: |
+            artifacts/*
+            실습녹화기_최종본/1_설명서/실습녹화기_사용설명서.pdf
+            실습녹화기_최종본/3_예제/샘플_학생용_회원가입연습.zip
+            실습녹화기_최종본/3_예제/샘플_편집용_회원가입연습.walksim
