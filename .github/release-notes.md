@@ -4,13 +4,15 @@
 
 | 파일 | 대상 |
 |---|---|
-| `실습녹화기-설치-x.y.z.exe` | **Windows** 데스크톱 앱 (윈도우·모든 프로그램 녹화) |
-| `실습녹화기-x.y.z-mac-arm64.dmg` | **Mac** (M1 이후, Apple Silicon) |
-| `실습녹화기-x.y.z-mac-x64.dmg` | **Mac** (인텔) |
-| `실습녹화기-크롬확장.zip` | **크롬 확장 프로그램** (웹사이트 실습 녹화) |
-| `실습녹화기_사용설명서.pdf` | 설치부터 학생 배포까지 그림 설명서 |
-| `샘플_학생용_회원가입연습.zip` | 예제 학생용 실습 (Cloudflare에 올려 보기) |
-| `샘플_편집용_회원가입연습.walksim` | 예제 편집용 파일 (편집기 → 📁 프로젝트 → 파일 열기) |
+| `PracticeRecorder-Windows-Setup-버전.exe` | **Windows** 데스크톱 앱 (윈도우·모든 프로그램 녹화) |
+| `PracticeRecorder-Mac-arm64-버전.dmg` | **Mac** (M1 이후, Apple Silicon) |
+| `PracticeRecorder-Mac-x64-버전.dmg` | **Mac** (인텔) |
+| `PracticeRecorder-Chrome-Extension.zip` | **크롬 확장 프로그램** (웹사이트 실습 녹화) |
+| `Manual-ko.pdf` | **사용 설명서** — 설치부터 학생 배포까지 그림으로 설명 |
+| `Sample-Student-Lesson.zip` | 예제 학생용 실습 (Cloudflare에 올려 보기) |
+| `Sample-Project.walksim` | 예제 편집용 파일 (편집기 → 📁 프로젝트 → 파일 열기) |
+
+(GitHub 첨부 파일은 한글 이름을 쓸 수 없어 영문 이름입니다. PracticeRecorder = 실습 녹화기)
 
 ## 설치할 때
 

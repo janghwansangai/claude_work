@@ -78,15 +78,24 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.release_tag || github.ref_name }}
-          target_commitish: ${{ github.sha }}
-          name: 실습 녹화기 ${{ inputs.release_tag || github.ref_name }}
-          make_latest: true
-          body_path: .github/release-notes.md
-          files: |
-            artifacts/*
-            실습녹화기_최종본/1_설명서/실습녹화기_사용설명서.pdf
-            실습녹화기_최종본/3_예제/샘플_학생용_회원가입연습.zip
-            실습녹화기_최종본/3_예제/샘플_편집용_회원가입연습.walksim
+      # GitHub는 릴리스 첨부 파일 이름의 한글을 지우므로 영문 이름으로 올린다. 같은 태그로 다시 실행하면 첨부 파일을 바꿔 올린다.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          mkdir upload
+          cp artifacts/*.exe artifacts/*.dmg upload/
+          cp artifacts/*.zip upload/PracticeRecorder-Chrome-Extension.zip
+          cp "실습녹화기_최종본/1_설명서/실습녹화기_사용설명서.pdf" upload/Manual-ko.pdf
+          cp "실습녹화기_최종본/3_예제/샘플_학생용_회원가입연습.zip" upload/Sample-Student-Lesson.zip
+          cp "실습녹화기_최종본/3_예제/샘플_편집용_회원가입연습.walksim" upload/Sample-Project.walksim
+          ls -la upload
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --title "실습 녹화기 $TAG" --notes-file .github/release-notes.md --latest
+            gh release view "$TAG" --json assets -q '.assets[].name' | while IFS= read -r a; do gh release delete-asset "$TAG" "$a" -y; done
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "실습 녹화기 $TAG" --notes-file .github/release-notes.md --latest
+          fi
+          gh release upload "$TAG" upload/* --clobber

@@ -18,9 +18,9 @@
 ## 설치
 
 ### 데스크톱 앱 (Windows / macOS)
-1. GitHub 저장소의 **Actions** 탭 → 가장 최근 **실습 녹화기 빌드** 실행 → 아래 **Artifacts**에서 내려받습니다.
-   - Windows: `실습녹화기-Windows` → `실습녹화기-설치-x.y.z.exe` 실행
-   - Mac: `실습녹화기-macOS` → Apple Silicon(M1 이후)은 `…mac-arm64.dmg`, 인텔 맥은 `…mac-x64.dmg`
+1. 저장소의 **[Releases](https://github.com/janghwansangai/claude_work/releases/latest)**에서 내려받습니다. (최신 개발 빌드는 **Actions** → **실습 녹화기 빌드** → Artifacts)
+   - Windows: `PracticeRecorder-Windows-Setup-x.y.z.exe` 실행
+   - Mac: Apple Silicon(M1 이후)은 `PracticeRecorder-Mac-arm64-x.y.z.dmg`, 인텔 맥은 `…Mac-x64-x.y.z.dmg`
 2. 처음 설치할 때 경고가 뜹니다(유료 인증서 없이 배포하기 때문).
    - Windows "PC 보호": **추가 정보 → 실행**
    - Mac "확인되지 않은 개발자": 앱을 **우클릭 → 열기**. 그래도 안 되면 터미널에서 `xattr -cr "/Applications/실습 녹화기.app"`
