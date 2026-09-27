@@ -22,6 +22,8 @@
    - Windows "PC 보호": **추가 정보 → 실행**
    - Mac "확인되지 않은 개발자": 앱을 **우클릭 → 열기**. 그래도 안 되면 터미널에서 `xattr -cr /Applications/WalkSim.app`
 3. Mac은 처음 녹화할 때 **화면 기록**, **손쉬운 사용(입력 모니터링)** 권한을 켜야 합니다(앱이 안내합니다). 권한을 켠 뒤 앱을 다시 실행하세요.
+   - **새 버전을 설치한 뒤 설정에 켜져 있는데도 권한 안내가 계속 뜨면**: 서명 없는 앱이라 macOS가 예전 버전에 준 권한을 새 앱에 적용하지 않은 것입니다. 안내 창의 **‘권한 다시 설정’**을 누르면 예전 기록을 지우고 앱이 다시 시작됩니다. 그다음 녹화를 시작해 권한을 다시 허용하세요.
+     (직접 하려면: 설정 목록에서 WalkSim을 「−」로 지우거나, 터미널에서 `tccutil reset ScreenCapture app.walksim.desktop`, `tccutil reset Accessibility app.walksim.desktop`, `tccutil reset ListenEvent app.walksim.desktop`)
 
 ### 크롬 확장 프로그램
 1. Actions의 `WalkSim-Chrome-Extension` 아티팩트를 내려받아 압축을 풉니다.

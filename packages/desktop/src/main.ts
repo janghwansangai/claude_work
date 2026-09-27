@@ -96,27 +96,71 @@ function broadcastState() {
 }
 
 // ---------- 권한 (macOS) ----------
+const BUNDLE_ID = 'app.walksim.desktop'; // package.json build.appId 와 같아야 한다
+const TCC_SERVICES = ['ScreenCapture', 'Accessibility', 'ListenEvent'];
+
+// 서명 없는(애드혹) 앱은 새 버전을 설치할 때마다 서명값이 바뀌어, 설정에는 켜져 있어도 예전 버전에 준 권한으로 남는다.
+// 이때는 WalkSim의 권한 기록을 지우고 다시 허용받아야 한다.
+async function resetPermissionsAndRelaunch() {
+  const { execFile } = await import('node:child_process');
+  await Promise.all(TCC_SERVICES.map(service => new Promise<void>(resolve => {
+    execFile('/usr/bin/tccutil', ['reset', service, BUNDLE_ID], () => resolve());
+  })));
+  await dialog.showMessageBox({
+    type: 'info',
+    message: 'WalkSim의 예전 권한 기록을 지웠습니다',
+    detail: '앱이 다시 시작됩니다. 다시 ‘화면 녹화 시작’을 누르고, macOS가 묻는 화면 기록·손쉬운 사용 권한을 허용하세요.\n권한을 허용한 뒤 macOS가 “종료 후 다시 열기”를 요구하면 WalkSim을 한 번 더 다시 실행하면 됩니다.',
+  });
+  app.relaunch();
+  app.exit(0);
+}
+
+type PermissionChoice = 'reset' | 'settings' | 'continue' | 'cancel';
+
+async function askAboutPermission(kind: 'screen' | 'input'): Promise<PermissionChoice> {
+  const screenText = '시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음';
+  const inputText = '시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용(및 입력 모니터링)';
+  const { response } = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['권한 다시 설정 (권장)', '설정 열기', '그래도 녹화 시도', '취소'],
+    defaultId: 0,
+    cancelId: 3,
+    message: kind === 'screen' ? '화면 기록 권한이 확인되지 않습니다' : '손쉬운 사용 권한이 확인되지 않습니다',
+    detail: [
+      `${kind === 'screen' ? screenText : inputText}에서 WalkSim을 켜야 합니다.`,
+      ...(kind === 'input' ? ['클릭·키 입력의 “종류”만 기록하며, 입력한 글자 내용은 기록하지 않습니다.'] : []),
+      '',
+      '이미 켜져 있는데도 이 메시지가 보이면, 새 버전을 설치하면서 macOS가 예전 권한을 새 앱에 적용하지 않은 것입니다.',
+      '‘권한 다시 설정’을 누르면 WalkSim의 예전 권한 기록을 지우고 앱을 다시 시작합니다.',
+    ].join('\n'),
+  });
+  return (['reset', 'settings', 'continue', 'cancel'] as const)[response] ?? 'cancel';
+}
+
 async function ensurePermissions(): Promise<string | null> {
   if (process.platform !== 'darwin') return null;
+
   if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
-    await desktopCapturer.getSources({ types: ['screen'] }).catch(() => []); // 설정 목록에 WalkSim이 나타나게 한다
-    const { response } = await dialog.showMessageBox({
-      type: 'info',
-      buttons: ['설정 열기', '취소'],
-      message: '화면 기록 권한이 필요합니다',
-      detail: '시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 기록에서 WalkSim을 켠 뒤, WalkSim을 다시 실행하세요.',
-    });
-    if (response === 0) void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-    return '화면 기록 권한이 없습니다.';
+    await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } }).catch(() => []); // 권한 요청·설정 목록 등록
+    const choice = await askAboutPermission('screen');
+    if (choice === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
+    if (choice === 'settings') {
+      void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+      return '화면 기록 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
+    }
+    if (choice === 'cancel') return '녹화를 취소했습니다.';
+    // 'continue': 상태 확인이 틀린 경우를 대비해 그대로 진행한다(권한이 정말 없으면 배경화면만 찍힌다).
   }
+
   if (!systemPreferences.isTrustedAccessibilityClient(false)) {
-    systemPreferences.isTrustedAccessibilityClient(true); // 시스템 안내 창 표시
-    await dialog.showMessageBox({
-      type: 'info',
-      message: '손쉬운 사용 권한이 필요합니다',
-      detail: '클릭·키 입력의 "종류"를 기록하려면 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용(및 입력 모니터링)에서 WalkSim을 켜 주세요. 입력한 글자 내용은 기록하지 않습니다.',
-    });
-    return '손쉬운 사용 권한이 없습니다.';
+    systemPreferences.isTrustedAccessibilityClient(true); // macOS 안내 창 표시
+    const choice = await askAboutPermission('input');
+    if (choice === 'reset') { await resetPermissionsAndRelaunch(); return '앱을 다시 시작합니다.'; }
+    if (choice === 'settings') {
+      void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
+      return '손쉬운 사용 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
+    }
+    if (choice === 'cancel') return '녹화를 취소했습니다.';
   }
   return null;
 }
