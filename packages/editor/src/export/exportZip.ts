@@ -86,13 +86,8 @@ export async function buildLessonZip(manifest: Manifest, getImage: (assetId: str
     `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=play/${slug}/">` +
     `<title>${escapeHtml(manifest.title)}</title></head><body><a href="play/${slug}/">실습 시작하기</a></body></html>`,
   );
-  files['README.txt'] = strToU8(
-    `WalkSim 정적 실습 패키지\n\n` +
-    `- 이 폴더 전체를 Cloudflare Pages(Direct Upload) 등 정적 웹호스팅에 올리면 됩니다.\n` +
-    `- 학생 주소: https://<사이트>/play/${slug}/\n` +
-    `- 파일을 더블클릭(file://)하면 동작하지 않습니다. 반드시 웹서버(HTTP/HTTPS)로 여세요.\n` +
-    `  (PC에서 확인: 이 폴더에서 \`python3 -m http.server 8080\` 실행 후 http://localhost:8080 접속)\n`,
-  );
+  // 윈도우 메모장에서도 한글이 깨지지 않도록 BOM + CRLF로 쓴다.
+  files['README.txt'] = strToU8('\uFEFF' + deployReadme(slug, manifest.title).replace(/\n/g, '\r\n'));
 
   const zipped = zipSync(files, { level: 6 });
   return new Blob([zipped as BlobPart], { type: 'application/zip' });
@@ -111,4 +106,46 @@ export function downloadBlob(blob: Blob, fileName: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+function deployReadme(slug: string, title: string): string {
+  return `WalkSim 학생용 실습 — ${title}
+==========================================
+
+이 ZIP은 학생용 실습 웹사이트 전체입니다. 로그인·서버 없이 동작하고,
+학생이 누르고 입력한 내용은 학생 기기에서만 처리되며 어디에도 저장·전송되지 않습니다.
+원본 캡처는 들어 있지 않고, 가림이 적용된 이미지만 들어 있습니다.
+
+※ ZIP이나 index.html을 더블클릭하면 동작하지 않습니다. 반드시 웹 주소로 여세요.
+
+[1] 학생에게 나눠 주기 — Cloudflare Pages (무료, 추천)
+  1. https://dash.cloudflare.com 가입·로그인
+  2. Workers & Pages → Create(생성) → Pages → Upload assets(에셋 업로드)
+  3. 프로젝트 이름 입력 (예: walksim-${slug.replace(/^project-/, '')})  ※ 학교·학생 이름은 넣지 마세요
+  4. 이 ZIP 파일을 그대로 끌어다 놓기 → Deploy site(배포)
+  5. 학생 주소: https://<프로젝트이름>.pages.dev
+     (이 실습 페이지 주소: https://<프로젝트이름>.pages.dev/play/${slug}/)
+  - QR 코드: 크롬에서 주소를 연 뒤 주소창 오른쪽 공유 아이콘 → QR 코드 만들기
+  - 수정할 때: 에디터에서 다시 ZIP 내보내기 → 같은 프로젝트에서 Create deployment → 새 ZIP 올리기 (주소는 그대로)
+
+[2] 수업 모드 (주소 끝에 붙이면 바로 시작)
+  ?mode=guide       안내 모드 — 누를 곳이 반짝이고 설명이 옆에 나옴
+  ?mode=practice    연습 모드 — 2번 틀리면 힌트, 3번 틀리면 위치 공개
+  ?mode=assessment  평가 모드 — 힌트 없음
+
+[3] 수업 전날 확인
+  - 시크릿 창으로 처음부터 끝까지 해 보기
+  - 학생이 쓸 실제 기기와 학교 와이파이에서 열어 보기
+
+[4] 인터넷에 올리지 않고 내 PC에서만 확인
+  1. 이 ZIP 압축 풀기
+  2. 압축 푼 폴더에서 터미널 열기 (Mac: 폴더 우클릭 → 폴더에서 새로운 터미널 열기 / Windows: 폴더 주소창에 cmd)
+  3. python3 -m http.server 8080   (Windows는 python -m http.server 8080, Python 설치 필요)
+  4. 브라우저에서 http://localhost:8080 열기 (끝낼 때 Ctrl+C)
+
+[주의]
+  - Cloudflare Pages 주소는 링크만 알면 누구나 볼 수 있는 공개 사이트입니다. 가상 자료만 올리세요.
+  - 실습 입력칸에 실제 이름·비밀번호를 넣지 말라고 학생에게 안내하세요.
+  - 내리려면: Cloudflare → 프로젝트 → Settings → Delete project
+`;
 }

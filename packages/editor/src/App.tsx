@@ -4,6 +4,10 @@ import { parseCapturePayload } from './project';
 import { burnMasks } from './imaging';
 import { desktop, isExtensionPage, subscribeToCaptures, useEditorLock } from './captureSource';
 import { DesktopRecord } from './components/DesktopRecord';
+import { DeployGuide } from './components/DeployGuide';
+import { PENDING_TTL_DAYS } from './storage/pendingStore';
+
+const daysLeft = (expiresAt: number) => Math.max(1, Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
 import { useInbox } from './inbox/useInbox';
 import { useProject, type SaveStatus } from './storage/useProject';
 import { InboxReview } from './components/InboxReview';
@@ -93,9 +97,9 @@ function App() {
   };
 
   const handleReset = () => {
-    const ok = window.confirm('현재 프로젝트와 모든 이미지·검수함 캡처를 이 브라우저에서 삭제하고 새로 시작합니다. 계속할까요?');
+    const ok = window.confirm('현재 프로젝트와 모든 이미지·검수함 캡처(임시 보관분 포함)를 이 컴퓨터에서 삭제하고 새로 시작합니다. 계속할까요?');
     if (!ok) return;
-    inbox.items.forEach(i => inbox.remove(i.id));
+    inbox.removeAll();
     setView({ kind: 'step' });
     void project.resetProject();
   };
@@ -169,6 +173,13 @@ function App() {
               </span>
             </h2>
             {desktop && canReceive && <DesktopRecord bridge={desktop} />}
+            {inbox.items.length > 0 && (
+              <p className={`text-[11px] mb-2 leading-relaxed ${inbox.storage === 'memory-only' ? 'text-red-600' : 'text-gray-400'}`}>
+                {inbox.storage === 'memory-only'
+                  ? '⚠ 임시 보관에 실패했습니다. 창을 닫으면 검수 전 캡처가 사라집니다.'
+                  : `🔒 암호화해 임시 보관 중 · 앱을 닫았다가 나중에 검수해도 됩니다 (${PENDING_TTL_DAYS}일 뒤 자동 삭제)`}
+              </p>
+            )}
             {inbox.items.length === 0 ? (
               <p className="text-xs text-gray-400 leading-relaxed">
                 {desktop
@@ -190,6 +201,7 @@ function App() {
                     <span className="text-xs">
                       <span className="text-amber-600 font-semibold">검수 필요 #{i + 1}</span>
                       <span className="block text-gray-500 truncate w-40">{item.instruction}</span>
+                      <span className="block text-[10px] text-gray-400">{daysLeft(item.expiresAt)}일 뒤 자동 삭제</span>
                     </span>
                   </button>
                 ))}
@@ -332,6 +344,7 @@ function SafetyPanel({ manifest, pendingInbox, missingImages, getImage }: {
           </p>
         )}
       </div>
+      <DeployGuide open={!!result?.ok} />
     </div>
   );
 }

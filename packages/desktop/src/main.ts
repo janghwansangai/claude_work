@@ -2,7 +2,7 @@
 // 교사용 에디터(웹과 동일)를 앱 안에서 열고, 전역 입력 훅 + 화면 스트림으로 "동작 직전 화면"과 동작 종류를 기록한다.
 // 개인정보: 원본 화면은 메모리에서만 다루고 에디터 검수함으로만 전달한다. 디스크·네트워크로 보내지 않는다.
 import {
-  app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, net, protocol, screen, session, shell, systemPreferences,
+  app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, net, protocol, safeStorage, screen, session, shell, systemPreferences,
   type Display,
 } from 'electron';
 import fs from 'node:fs';
@@ -140,16 +140,16 @@ async function offerMoveToApplications() {
   }
 }
 
-type PermissionChoice = 'reset' | 'settings' | 'continue' | 'cancel';
+type PermissionChoice = 'reset' | 'settings' | 'cancel';
 
 async function askAboutPermission(kind: 'screen' | 'input'): Promise<PermissionChoice> {
   const screenText = '시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음';
   const inputText = '시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용(및 입력 모니터링)';
   const { response } = await dialog.showMessageBox({
     type: 'warning',
-    buttons: ['권한 다시 설정 (권장)', '설정 열기', '그래도 녹화 시도', '취소'],
+    buttons: ['권한 다시 설정 (권장)', '설정 열기', '취소'],
     defaultId: 0,
-    cancelId: 3,
+    cancelId: 2,
     message: kind === 'screen' ? '화면 기록 권한이 확인되지 않습니다' : '손쉬운 사용 권한이 확인되지 않습니다',
     detail: [
       `${kind === 'screen' ? screenText : inputText}에서 WalkSim을 켜야 합니다.`,
@@ -161,7 +161,7 @@ async function askAboutPermission(kind: 'screen' | 'input'): Promise<PermissionC
       '설정 목록에 WalkSim이 보이지 않으면: 목록 아래 「+」를 눌러 응용 프로그램 폴더의 WalkSim을 추가하고 켠 뒤, WalkSim을 다시 실행하세요.',
     ].join('\n'),
   });
-  return (['reset', 'settings', 'continue', 'cancel'] as const)[response] ?? 'cancel';
+  return (['reset', 'settings', 'cancel'] as const)[response] ?? 'cancel';
 }
 
 async function ensurePermissions(): Promise<string | null> {
@@ -175,8 +175,7 @@ async function ensurePermissions(): Promise<string | null> {
       void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
       return '화면 기록 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
     }
-    if (choice === 'cancel') return '녹화를 취소했습니다.';
-    // 'continue': 상태 확인이 틀린 경우를 대비해 그대로 진행한다(권한이 정말 없으면 배경화면만 찍힌다).
+    return '녹화를 취소했습니다.';
   }
 
   if (!systemPreferences.isTrustedAccessibilityClient(false)) {
@@ -187,7 +186,7 @@ async function ensurePermissions(): Promise<string | null> {
       void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
       return '손쉬운 사용 권한을 켠 뒤 WalkSim을 다시 실행하세요.';
     }
-    if (choice === 'cancel') return '녹화를 취소했습니다.';
+    return '녹화를 취소했습니다.';
   }
   return null;
 }
@@ -512,6 +511,17 @@ function registerIpc() {
     editorReady = true;
     while (queue.length) sendToEditor('rec:capture', queue.shift());
     broadcastState();
+  });
+  // 운영체제 보안 저장소를 쓸 수 없으면(null) 에디터가 브라우저 방식 키로 대신한다.
+  const secureAvailable = () => safeStorage.isEncryptionAvailable()
+    && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text');
+  ipcMain.handle('secure:protect', (e, plain: string) => {
+    if (e.sender !== editorWin?.webContents || typeof plain !== 'string' || !secureAvailable()) return null;
+    return safeStorage.encryptString(plain).toString('base64');
+  });
+  ipcMain.handle('secure:unprotect', (e, wrapped: string) => {
+    if (e.sender !== editorWin?.webContents || typeof wrapped !== 'string' || !secureAvailable()) return null;
+    try { return safeStorage.decryptString(Buffer.from(wrapped, 'base64')); } catch { return null; }
   });
   ipcMain.handle('rec:start', e => (e.sender === editorWin?.webContents ? startRecording() : { ok: false }));
   ipcMain.handle('rec:stop', async e => { if (e.sender === editorWin?.webContents) await stopRecording(); });
