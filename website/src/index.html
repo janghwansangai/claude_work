@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>실습 녹화기 — 조작을 녹화하면 학생용 모의 실습이 됩니다</title>
+  <meta name="description" content="선생님이 프로그램을 조작하는 모습을 녹화하면, 학생이 로그인·설치 없이 똑같이 눌러 보며 연습하는 모의 실습 웹페이지가 만들어집니다. Windows·Mac·크롬 지원, 무료.">
+  <meta property="og:title" content="실습 녹화기">
+  <meta property="og:description" content="조작을 녹화하면 학생이 따라 해 보는 모의 실습이 됩니다. Windows·Mac·크롬, 무료.">
+  <meta property="og:image" content="img/student-guide.jpg">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-in">
+      <a class="brand" href="#top"><img src="favicon.svg" alt="" width="28" height="28"> 실습 녹화기</a>
+      <nav class="nav" aria-label="바로 가기">
+        <a href="#how">사용법</a>
+        <a href="#demo">체험</a>
+        <a href="#download">다운로드</a>
+        <a href="#share">학생에게 배포</a>
+        <a href="#faq">자주 묻는 질문</a>
+      </nav>
+      <a class="btn btn-small" href="#download">무료 다운로드</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- 첫 화면 -->
+    <section class="hero">
+      <div class="wrap hero-in">
+        <div class="hero-text">
+          <p class="eyebrow">선생님을 위한 무료 수업 도구</p>
+          <h1>조작하는 모습을 녹화하면<br><span class="hl">학생이 따라 해 보는 모의 실습</span>이 됩니다</h1>
+          <p class="lead">윈도우 사용법, 사이트 가입, 한글·엑셀, 유니티까지. 실습 녹화기로 한 번 시연하면 학생은 <b>로그인·설치 없이 주소 하나로</b> 똑같이 눌러 보며 연습합니다.</p>
+          <div class="cta">
+            <a class="btn" href="#download">무료 다운로드</a>
+            <a class="btn btn-ghost" href="demo/" target="_blank" rel="noopener">학생 화면 체험하기 →</a>
+          </div>
+          <p class="meta">Windows 10·11 · macOS (Apple Silicon·Intel) · Chrome 확장 프로그램</p>
+        </div>
+        <figure class="hero-shot">
+          <img src="img/student-guide.jpg" alt="학생 화면: 안내 모드에서 아이디 입력칸 옆에 지시 말풍선이 보인다" width="1280" height="800">
+          <figcaption>학생 화면 — 안내 모드</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- 흐름 -->
+    <section class="flow-sec">
+      <div class="wrap">
+        <ol class="flow">
+          <li><span class="num">1</span><b>녹화</b><small>평소처럼 조작</small></li>
+          <li><span class="num">2</span><b>검수</b><small>개인정보 가리고 승인</small></li>
+          <li><span class="num">3</span><b>편집</b><small>지시문·힌트 다듬기</small></li>
+          <li><span class="num">4</span><b>ZIP 내보내기</b><small>자동 안전 확인</small></li>
+          <li><span class="num">5</span><b>올리기</b><small>Cloudflare(무료)</small></li>
+          <li><span class="num">6</span><b>학생 실습</b><small>주소·QR로 공유</small></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 특징 -->
+    <section class="sec" id="features">
+      <div class="wrap">
+        <h2>이런 점이 좋아요</h2>
+        <div class="grid3">
+          <article class="card">
+            <div class="ico" aria-hidden="true">🖥️</div>
+            <h3>어떤 프로그램이든</h3>
+            <p>데스크톱 앱은 윈도우·맥 화면 전체나 원하는 영역을 녹화합니다. 파일 탐색기, 브라우저 설정, 한글·엑셀, 유니티 모두 됩니다.</p>
+          </article>
+          <article class="card">
+            <div class="ico" aria-hidden="true">🌐</div>
+            <h3>웹사이트는 더 똑똑하게</h3>
+            <p>크롬 확장은 입력칸·비밀번호 칸을 알아보고, 이메일·전화번호 같은 개인정보 후보를 미리 가려 줍니다.</p>
+          </article>
+          <article class="card">
+            <div class="ico" aria-hidden="true">🛡️</div>
+            <h3>개인정보는 선생님 PC 안에</h3>
+            <p>원본 화면은 선생님 컴퓨터에만 암호화해 보관합니다. 학생에게는 가림을 확인·승인한 이미지만 갑니다. 입력한 글자는 녹화하지 않습니다.</p>
+          </article>
+          <article class="card">
+            <div class="ico" aria-hidden="true">🎯</div>
+            <h3>안내 · 연습 · 평가 모드</h3>
+            <p>처음엔 누를 곳을 반짝여 안내하고, 연습에선 두 번 틀리면 힌트, 평가에선 힌트 없이 끝까지. 오답·도움 횟수를 보여 줍니다.</p>
+          </article>
+          <article class="card">
+            <div class="ico" aria-hidden="true">🔑</div>
+            <h3>로그인·서버 없음</h3>
+            <p>학생용 실습은 정적 웹페이지라 무료 호스팅에 올리면 끝. 학생 결과는 학생 화면에만 보이고 어디에도 저장·전송되지 않습니다.</p>
+          </article>
+          <article class="card">
+            <div class="ico" aria-hidden="true">📱</div>
+            <h3>태블릿·크롬북도</h3>
+            <p>더블클릭은 두 번 탭, 오른쪽 클릭은 길게 누르기. 단축키·스크롤 단계는 화면의 대체 버튼으로 할 수 있습니다.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 사용법 -->
+    <section class="sec sec-alt" id="how">
+      <div class="wrap">
+        <h2>사용법</h2>
+        <p class="sec-lead">자세한 내용은 <a href="files/manual-ko.pdf">사용 설명서(PDF, 21쪽)</a>에 그림과 함께 있습니다.</p>
+
+        <div class="step">
+          <div class="step-text">
+            <p class="step-no">1단계</p>
+            <h3>녹화하기</h3>
+            <p><b>데스크톱 앱</b>: <kbd>● 화면 녹화 시작</kbd> → 녹화할 영역을 드래그(또는 전체 화면) → 평소처럼 조작 → 도구 막대의 <kbd>중지</kbd>.<br>
+            단축키 <kbd>Ctrl/⌘+Shift+F8</kbd> 일시정지, <kbd>Ctrl/⌘+Shift+F9</kbd> 중지.</p>
+            <p><b>크롬 확장</b>: 녹화할 탭에서 실습 녹화기 아이콘 → 체크 → <kbd>이 탭 녹화 시작</kbd> → 조작 → <kbd>녹화 중지</kbd>.</p>
+            <p class="note">클릭·더블클릭·오른쪽 클릭·끌어서 놓기·글자 입력·단축키·스크롤을 알아봅니다. 동작마다 <b>누르기 직전 화면</b>이 한 단계가 됩니다.</p>
+          </div>
+          <div class="step-shots">
+            <img src="img/desktop-region.jpg" alt="데스크톱 앱: 녹화할 영역을 드래그하라는 안내" loading="lazy">
+            <img src="img/desktop-toolbar.png" alt="녹화 중 도구 막대: 일시정지, 중지" loading="lazy" class="shot-small">
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-text">
+            <p class="step-no">2단계</p>
+            <h3>검수함에서 개인정보 가리고 승인</h3>
+            <p>녹화한 장면은 먼저 <b>검수함</b>에 쌓입니다. 개인정보 후보는 이미 검은 상자로 가려져 있고, 이름·사진·알림 등 나머지를 직접 드래그해 가린 뒤 승인합니다.</p>
+            <p>여러 장을 골라 <b>한꺼번에 승인·버리기</b>할 수 있고, 앱을 닫았다가 <b>나중에 검수</b>해도 됩니다(암호화 보관).</p>
+          </div>
+          <div class="step-shots"><img src="img/inbox-mask.jpg" alt="검수함: 이메일과 입력값이 검은 상자로 가려진 캡처" loading="lazy"></div>
+        </div>
+
+        <div class="step">
+          <div class="step-text">
+            <p class="step-no">3단계</p>
+            <h3>단계 편집</h3>
+            <p>학생에게 보일 <b>지시문</b>과 두 번 틀리면 보일 <b>힌트</b>를 다듬고, 클릭 영역·확대 영역을 조정합니다. 동작 종류(클릭·더블클릭·끌어서 놓기·글자 입력·단축키·스크롤·선택지 분기)도 바꿀 수 있습니다.</p>
+            <p>📁 <b>프로젝트</b>에서 언제든 저장·열기, <code>.walksim</code> 파일로 다른 컴퓨터에서 이어서 편집.</p>
+          </div>
+          <div class="step-shots"><img src="img/step-edit.jpg" alt="단계 편집 화면: 지시사항, 힌트, 클릭 영역" loading="lazy"></div>
+        </div>
+
+        <div class="step">
+          <div class="step-text">
+            <p class="step-no">4단계</p>
+            <h3>안전 확인 · 학생용 ZIP 내보내기</h3>
+            <p>지시문 속 전화번호·이메일, 이미지 없는 단계, 검수 안 한 장면을 자동으로 찾아 <b>“4단계”처럼 번호로</b> 알려 주고, 누르면 그 단계로 바로 갑니다. 문제가 없으면 <b>학생용 ZIP</b>을 내려받습니다.</p>
+          </div>
+          <div class="step-shots"><img src="img/safety.jpg" alt="안전 확인: 4단계에 휴대전화 번호로 보이는 글자가 있다는 경고" loading="lazy"></div>
+        </div>
+
+        <div class="step">
+          <div class="step-text">
+            <p class="step-no">5단계</p>
+            <h3>Cloudflare에 올리고 주소 공유</h3>
+            <p>받은 ZIP을 Cloudflare 계정 홈에 끌어다 놓으면 <code>https://이름.workers.dev</code> 주소가 생깁니다. <a href="#share">자세히 보기 ↓</a></p>
+          </div>
+          <div class="step-shots"><img src="img/cloudflare.png" alt="Cloudflare 계정 홈: Ship something new 칸에 ZIP을 끌어다 놓는다" loading="lazy"></div>
+        </div>
+
+        <div class="step">
+          <div class="step-text">
+            <p class="step-no">6단계</p>
+            <h3>학생 실습</h3>
+            <p>학생은 <b>안내 · 연습 · 평가</b> 모드를 고릅니다. 주소 끝에 <code>?mode=guide</code>, <code>?mode=practice</code>, <code>?mode=assessment</code>를 붙이면 그 모드로 바로 시작합니다.</p>
+            <p><a href="demo/" target="_blank" rel="noopener">지금 학생 화면 체험하기 →</a></p>
+          </div>
+          <div class="step-shots"><img src="img/student-start.jpg" alt="학생 시작 화면: 안내, 연습, 평가 모드 선택" loading="lazy"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 체험 -->
+    <section class="sec" id="demo">
+      <div class="wrap demo">
+        <div>
+          <h2>학생 화면을 직접 해 보세요</h2>
+          <p>실습 녹화기로 만든 <b>“학급 누리집 회원가입”</b> 5단계 예제입니다. 아이디 입력 → 연습용 비밀번호 → 약관 동의 → 가입하기 순서로 따라 해 보세요.</p>
+          <div class="cta">
+            <a class="btn" href="demo/" target="_blank" rel="noopener">체험 시작 (안내 모드 추천)</a>
+          </div>
+          <p class="meta">예제 파일 내려받기: <a href="files/sample-student-lesson.zip">학생용 ZIP</a> · <a href="files/sample-project.walksim">편집용 .walksim</a></p>
+        </div>
+        <img src="img/student-done.jpg" alt="실습 완료 화면: 오답 0회, 도움 사용 0회" loading="lazy">
+      </div>
+    </section>
+
+    <!-- 다운로드 -->
+    <section class="sec sec-alt" id="download">
+      <div class="wrap">
+        <h2>다운로드</h2>
+        <p class="sec-lead">무료입니다. <span id="ver-label">최신 버전 1.0.0</span> · <a href="https://github.com/janghwansangai/claude_work/releases/latest" target="_blank" rel="noopener">모든 버전 보기</a></p>
+        <p class="os-hint" id="os-hint" hidden></p>
+
+        <div class="grid-dl">
+          <article class="dl" data-os="windows">
+            <h3>Windows</h3>
+            <p>Windows 10 · 11 (64비트)<br>모든 프로그램 녹화</p>
+            <a class="btn" id="dl-win" href="https://github.com/janghwansangai/claude_work/releases/download/desktop-v1.0.0/PracticeRecorder-Windows-Setup-1.0.0.exe">설치 파일 받기 <span class="size">112MB</span></a>
+          </article>
+          <article class="dl" data-os="mac">
+            <h3>Mac · Apple Silicon</h3>
+            <p>M1 · M2 · M3 · M4 이후 맥<br>모든 프로그램 녹화</p>
+            <a class="btn" id="dl-mac-arm" href="https://github.com/janghwansangai/claude_work/releases/download/desktop-v1.0.0/PracticeRecorder-Mac-arm64-1.0.0.dmg">DMG 받기 <span class="size">127MB</span></a>
+          </article>
+          <article class="dl" data-os="mac">
+            <h3>Mac · Intel</h3>
+            <p>인텔 프로세서 맥<br>모든 프로그램 녹화</p>
+            <a class="btn" id="dl-mac-x64" href="https://github.com/janghwansangai/claude_work/releases/download/desktop-v1.0.0/PracticeRecorder-Mac-x64-1.0.0.dmg">DMG 받기 <span class="size">134MB</span></a>
+          </article>
+          <article class="dl" data-os="chrome">
+            <h3>Chrome 확장</h3>
+            <p>웹사이트 실습 녹화<br>입력칸·개인정보 자동 인식</p>
+            <a class="btn" href="files/PracticeRecorder-Chrome-Extension.zip">ZIP 받기 <span class="size">0.3MB</span></a>
+          </article>
+        </div>
+        <p class="meta center">📘 <a href="files/manual-ko.pdf">사용 설명서 PDF</a> · 내 맥이 어떤 칩인지: 화면 왼쪽 위 사과 메뉴 → <b>이 Mac에 관하여</b> → ‘칩’이 Apple M…이면 Apple Silicon</p>
+
+        <h3 class="sub">설치 방법</h3>
+        <div class="install">
+          <details open>
+            <summary>Windows</summary>
+            <ol>
+              <li>받은 <code>PracticeRecorder-Windows-Setup-….exe</code>를 실행합니다.</li>
+              <li><b>“Windows의 PC 보호”</b> 창이 뜨면 <b>추가 정보 → 실행</b>을 누릅니다. (유료 인증서 없이 배포해서 나오는 경고입니다.)</li>
+              <li>바탕화면의 <b>실습 녹화기</b>를 실행합니다.</li>
+            </ol>
+          </details>
+          <details>
+            <summary>Mac</summary>
+            <ol>
+              <li>DMG를 열고 <b>실습 녹화기를 ‘응용 프로그램’ 폴더로 끌어다 놓은 뒤 그곳에서 실행</b>합니다. DMG 창에서 바로 실행하면 화면 기록 권한이 유지되지 않습니다.</li>
+              <li>“확인되지 않은 개발자” 경고가 뜨면 앱을 <b>우클릭 → 열기</b>. 그래도 안 되면 터미널에서 <code>xattr -cr "/Applications/실습 녹화기.app"</code></li>
+              <li>처음 녹화할 때 macOS 창의 <b>‘시스템 설정 열기’</b>를 눌러 <b>화면 기록</b>과 <b>손쉬운 사용</b> 목록에서 실습 녹화기를 켜고, 앱을 <b>종료(⌘Q) 후 다시 실행</b>합니다.</li>
+              <li>새 버전 설치 후 권한 안내가 계속 뜨면 안내 창의 <b>‘권한 다시 설정’</b>을 누르세요.</li>
+            </ol>
+          </details>
+          <details>
+            <summary>Chrome 확장 프로그램</summary>
+            <ol>
+              <li>받은 ZIP의 압축을 풉니다. (풀린 폴더는 지우지 말고 그대로 두세요.)</li>
+              <li>크롬 주소창에 <code>chrome://extensions</code> → 오른쪽 위 <b>개발자 모드</b> 켜기</li>
+              <li><b>압축해제된 확장 프로그램 로드</b> → 압축을 푼 폴더 선택</li>
+              <li>퍼즐 조각 아이콘에서 <b>실습 녹화기</b>를 고정(📌)해 두면 편합니다.</li>
+            </ol>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- 배포 -->
+    <section class="sec" id="share">
+      <div class="wrap">
+        <h2>학생에게 나눠 주기</h2>
+        <p class="sec-lead">학생용 ZIP은 더블클릭으로는 열리지 않습니다. 무료 호스팅 <b>Cloudflare</b>에 올려 주소로 엽니다.</p>
+        <div class="share">
+          <ol class="big-steps">
+            <li><a href="https://dash.cloudflare.com/sign-up" target="_blank" rel="noopener">dash.cloudflare.com</a>에 가입·로그인합니다(신용카드 불필요).</li>
+            <li>계정 홈의 <b>Ship something new</b>(① “Drop a folder, or a zip”) 칸에 <b>받은 ZIP을 그대로 끌어다 놓고</b> 안내에 따라 배포합니다.</li>
+            <li><code>https://무작위이름.내계정.workers.dev</code> 같은 주소가 생기면 <b>그 주소를 그대로</b> 학생에게 줍니다. 첫 화면이 실습으로 자동 이동합니다.</li>
+            <li>칠판·클래스룸에 주소를 올리거나 QR 코드를 띄웁니다(크롬 주소창 공유 아이콘 → QR 코드 만들기).</li>
+          </ol>
+          <img src="img/cloudflare.png" alt="Cloudflare 계정 홈: ① ZIP을 끌어다 놓는 곳, ② 올린 사이트를 다시 찾는 왼쪽 컴퓨트 메뉴" loading="lazy">
+        </div>
+        <p class="meta">올린 사이트 찾기·삭제는 왼쪽 <b>컴퓨트</b>(②). 실습을 고쳤으면 새 ZIP을 같은 칸에 다시 올리세요. Cloudflare 화면은 자주 바뀌니 그림과 다르면 “Drop a folder, or a zip” 또는 “Create app”을 찾으세요.</p>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="sec sec-alt" id="faq">
+      <div class="wrap narrow">
+        <h2>자주 묻는 질문</h2>
+        <details><summary>정말 무료인가요?</summary><p>네. 프로그램도 무료이고, 학생용 실습은 Cloudflare 무료 요금제로 올릴 수 있습니다.</p></details>
+        <details><summary>학생 개인정보가 서버로 가지 않나요?</summary><p>학생용 실습에는 서버·로그인·데이터베이스가 없습니다. 학생이 누르거나 입력한 내용은 학생 기기에서만 처리되고 어디에도 저장·전송되지 않습니다. 다만 학생 주소는 링크만 알면 누구나 볼 수 있으니 <b>가상 자료만</b> 올리세요.</p></details>
+        <details><summary>녹화할 때 입력한 비밀번호가 남지 않나요?</summary><p>입력한 글자는 녹화하지 않습니다. 비밀번호 칸은 학생 화면에서 ‘연습용 비밀번호 채우기’ 버튼으로 바뀝니다.</p></details>
+        <details><summary>크롬 확장과 데스크톱 앱 중 무엇을 쓰나요?</summary><p>웹사이트 사용법·사이트 가입은 <b>크롬 확장</b>(입력칸·개인정보 자동 인식), 윈도우·맥 자체나 한글·엑셀·유니티 같은 프로그램은 <b>데스크톱 앱</b>을 쓰세요. 편집기와 결과물은 같습니다.</p></details>
+        <details><summary>(Mac) 권한을 켰는데 계속 권한을 달라고 해요.</summary><p>① 앱이 응용 프로그램 폴더에 있는지 확인 → ② ⌘Q로 완전히 종료 후 다시 실행 → ③ 그래도 안 되면 안내 창의 ‘권한 다시 설정’. 목록에 앱이 없으면 「+」로 응용 프로그램 → 실습 녹화기를 추가하세요.</p></details>
+        <details><summary>ZIP을 더블클릭했더니 빈 화면만 나와요.</summary><p>정상입니다. 브라우저 보안 때문에 웹서버(주소)로 열어야 합니다. Cloudflare에 올리거나, 설명서의 “내 PC에서만 확인하기”를 보세요.</p></details>
+        <details><summary>모니터가 여러 대예요.</summary><p>녹화를 시작하면 모든 모니터에 선택 화면이 뜹니다. 녹화할 모니터에서 영역을 드래그하거나 그 모니터의 ‘전체 화면 녹화’를 누르세요.</p></details>
+        <details><summary>학교 홈페이지(LMS) 안에 넣을 수 있나요?</summary><p>기본 보안 설정이 다른 사이트 안에 끼워 넣기를 막습니다. 주소 링크나 QR 코드로 공유하세요.</p></details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-in">
+      <div>
+        <p class="brand"><img src="favicon.svg" alt="" width="22" height="22"> 실습 녹화기</p>
+        <p class="meta">학교 수업용 인터랙티브 모의 실습 만들기 · 무료</p>
+      </div>
+      <nav aria-label="참고 링크">
+        <a href="files/manual-ko.pdf">사용 설명서 (PDF)</a>
+        <a href="https://github.com/janghwansangai/claude_work/releases/latest" target="_blank" rel="noopener">모든 버전 (GitHub)</a>
+        <a href="https://github.com/janghwansangai/claude_work" target="_blank" rel="noopener">소스 코드</a>
+      </nav>
+    </div>
+  </footer>
+  <script src="site.js"></script>
+</body>
+</html>
