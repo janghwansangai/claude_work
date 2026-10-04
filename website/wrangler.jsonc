@@ -1,7 +1,0 @@
-// Cloudflare Workers(정적 파일) 배포 설정 — GitHub Actions의 "소개 사이트 배포"가 사용한다.
-// 주소: https://practice-recorder.<계정 하위 도메인>.workers.dev
-{
-  "name": "practice-recorder",
-  "compatibility_date": "2026-09-01",
-  "assets": { "directory": "./dist" }
-}
