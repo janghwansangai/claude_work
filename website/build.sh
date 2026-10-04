@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # 소개 사이트를 dist/ 로 모은다: 페이지 + 설명서 그림 + 설명서 PDF + 크롬 확장 + 체험용 예제 실습.
 # 사용: bash website/build.sh   (결과: website/dist, 실습녹화기_최종본/4_소개사이트/실습녹화기-소개사이트.zip)
+# Cloudflare(GitHub 연동) 빌드 서버에서도 그대로 돈다: 빌드 명령 `bash website/build.sh`, 결과 폴더 `website/dist`.
 set -euo pipefail
 cd "$(dirname "$0")"
+# zip/unzip이 없는 빌드 환경에서는 python으로 대신한다
+unzip_to() { if command -v unzip > /dev/null; then unzip -q "$1" -d "$2"; else python3 -m zipfile -e "$1" "$2"; fi; }
 ROOT=..
 KIT="$ROOT/실습녹화기_최종본"
 IMG="$KIT/1_설명서/images"
@@ -27,10 +30,13 @@ cp "$KIT/3_예제/샘플_학생용_회원가입연습.zip" dist/files/sample-stu
 cp "$KIT/3_예제/샘플_편집용_회원가입연습.walksim" dist/files/sample-project.walksim
 
 # 체험: 예제 학생용 ZIP을 그대로 /demo/ 에 푼다(사이트 보안 헤더는 루트 _headers가 적용)
-unzip -q "$KIT/3_예제/샘플_학생용_회원가입연습.zip" -d dist/demo
+unzip_to "$KIT/3_예제/샘플_학생용_회원가입연습.zip" dist/demo
 rm -f dist/demo/_headers dist/demo/README.txt
 
+# 끌어다 놓기용 ZIP (zip 명령이 없으면 건너뛴다 — Cloudflare 빌드에는 필요 없음)
 OUT="$KIT/4_소개사이트/실습녹화기-소개사이트.zip"
-mkdir -p "$(dirname "$OUT")" && rm -f "$OUT"
-(cd dist && zip -qrX "$OLDPWD/$OUT" .)
-echo "built → website/dist ($(du -sh dist | cut -f1)), $OUT"
+if command -v zip > /dev/null; then
+  mkdir -p "$(dirname "$OUT")" && rm -f "$OUT"
+  (cd dist && zip -qrX "$OLDPWD/$OUT" .)
+fi
+echo "built → website/dist ($(du -sh dist | cut -f1))"
