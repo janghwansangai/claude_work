@@ -50,6 +50,6 @@
   link.addEventListener('click', function (e) {
     e.preventDefault();
     if (window.BugReporter && typeof window.BugReporter.open === 'function') { window.BugReporter.open(); return; }
-    window.open('https://script.google.com/macros/s/AKfycbxsRD7vRlEP9oKlvlDDPww8cYaDadTTIp1KrqYWSVU5qE5_gUh3bNUskBhHDlXH6FskvA/exec?app=practicerecorder&v=1.1.0&where=' + encodeURIComponent('소개 사이트'), '_blank', 'noopener');
+    window.open('https://script.google.com/macros/s/AKfycbxsRD7vRlEP9oKlvlDDPww8cYaDadTTIp1KrqYWSVU5qE5_gUh3bNUskBhHDlXH6FskvA/exec?app=practicerecorder&v=1.1.1&where=' + encodeURIComponent('소개 사이트'), '_blank', 'noopener');
   });
 })();
