@@ -14,7 +14,9 @@
     "dist:linux": "npm run build && electron-builder --linux dir --publish never"
   },
   "dependencies": {
-    "electron-updater": "^6.8.11",
+    "electron-updater": "^6.8.11"
+  },
+  "optionalDependencies": {
     "uiohook-napi": "^1.5.4"
   },
   "devDependencies": {
