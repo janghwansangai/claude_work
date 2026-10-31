@@ -16,7 +16,7 @@ import { ProjectsDialog } from './components/ProjectsDialog';
 import { SafetyPanel } from './components/SafetyPanel';
 import { isEditableTarget, useUndoHistory } from './history';
 import { openPreview, previewAvailable, usePreviewServer } from './preview';
-import { APP_AUTHOR, APP_NAME, appVersion, openBugReport } from './appInfo';
+import { APP_AUTHOR, APP_NAME, RELEASES_LATEST, appVersion, openBugReport, useExtensionUpdate } from './appInfo';
 
 const SAVE_STATUS_LABEL: Record<SaveStatus, { text: string; className: string }> = {
   loading: { text: '불러오는 중…', className: 'text-gray-400' },
@@ -48,6 +48,7 @@ function App() {
   const dragRef = useRef<{ start: number; base: Set<string> } | null>(null);
 
   const { manifest, selectedStepId, images, hydrated, saveStatus } = project;
+  const newVersion = useExtensionUpdate();
   const canReceive = hydrated && lock === 'owner';
 
   // ---------- 되돌리기 ----------
@@ -519,6 +520,17 @@ function App() {
 
           <footer className="p-3 border-t text-[11px] text-gray-400 leading-relaxed" aria-label="프로그램 정보">
             <p>{APP_NAME} v{appVersion} · 제작: {APP_AUTHOR}</p>
+            {newVersion && (
+              <a
+                href={RELEASES_LATEST}
+                target="_blank"
+                rel="noopener"
+                className="mt-1 block rounded bg-blue-50 border border-blue-200 text-blue-700 px-2 py-1 no-underline"
+                title="새 확장 ZIP을 받아 같은 폴더에 풀고 chrome://extensions 에서 ⟳(새로고침)을 누르세요"
+              >
+                🔔 새 버전 {newVersion}이 나왔어요 → 받기
+              </a>
+            )}
             <button
               type="button"
               onClick={() => openBugReport(SCREEN_NAME[view.kind])}

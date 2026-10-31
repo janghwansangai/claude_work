@@ -25,7 +25,11 @@ jobs:
         include:
           - os: windows-latest
             script: dist:win
-            files: packages/desktop/release/*.exe
+            # latest.yml·blockmap: Windows 자동 업데이트(electron-updater)가 새 버전을 찾고 검증하는 데 쓴다.
+            files: |
+              packages/desktop/release/*.exe
+              packages/desktop/release/*.exe.blockmap
+              packages/desktop/release/latest.yml
             name: 실습녹화기-Windows
           - os: macos-latest
             script: dist:mac
@@ -87,6 +91,7 @@ jobs:
         run: |
           mkdir upload
           cp artifacts/*.exe artifacts/*.dmg upload/
+          cp artifacts/latest.yml artifacts/*.exe.blockmap upload/
           cp artifacts/*.zip upload/PracticeRecorder-Chrome-Extension.zip
           cp "실습녹화기_최종본/1_설명서/실습녹화기_사용설명서.pdf" upload/Manual-ko.pdf
           cp "실습녹화기_최종본/3_예제/샘플_학생용_회원가입연습.zip" upload/Sample-Student-Lesson.zip

@@ -6,6 +6,7 @@ import {
   WebContentsView, type Display, type MenuItemConstructorOptions,
 } from 'electron';
 import { APP_AUTHOR, APP_NAME, bugReportUrl } from '@walksim/shared/feedback';
+import { autoUpdateEnabled, checkForUpdates, initUpdates, onIdle as updatesOnIdle, setAutoUpdateEnabled, supported as updatesSupported } from './updater';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -490,6 +491,7 @@ async function stopRecording() {
   r.capture.destroy();
   r.toolbar.destroy();
   broadcastState();
+  updatesOnIdle(); // 녹화 중에 미뤄 둔 업데이트 안내
   if (editorWin) {
     editorWin.restore();
     editorWin.focus();
@@ -646,6 +648,15 @@ function setupMenu() {
       submenu: [
         { label: '🐞 오류 신고·개선 제안…', click: openBugReport },
         { type: 'separator' },
+        { label: '업데이트 확인…', click: () => { void checkForUpdates(true); } },
+        {
+          label: '자동으로 업데이트 확인',
+          type: 'checkbox',
+          checked: autoUpdateEnabled(),
+          enabled: updatesSupported(),
+          click: item => setAutoUpdateEnabled(item.checked),
+        },
+        { type: 'separator' },
         { label: `${APP_NAME} 정보`, click: () => { void showAbout(); } },
       ],
     },
@@ -694,6 +705,7 @@ app.whenReady().then(async () => {
   restrictPermissions();
   registerIpc();
   setupMenu();
+  initUpdates(() => !!rec);
   createEditor();
   app.on('activate', () => { if (!editorWin) createEditor(); });
 });

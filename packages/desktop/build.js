@@ -34,7 +34,7 @@ async function buildApp() {
     fs.rmSync('dist', { recursive: true, force: true });
   }
   fs.mkdirSync('dist/ui', { recursive: true });
-  const node = { bundle: true, platform: 'node', format: 'cjs', target: 'node22', external: ['electron', 'uiohook-napi'] };
+  const node = { bundle: true, platform: 'node', format: 'cjs', target: 'node22', external: ['electron', 'uiohook-napi', 'electron-updater'] };
   await Promise.all([
     esbuild.build({ ...node, entryPoints: ['src/main.ts'], outfile: 'dist/main.js' }),
     esbuild.build({ ...node, entryPoints: ['src/preload-editor.ts', 'src/preload-ui.ts', 'src/preload-split.ts'], outdir: 'dist' }),
