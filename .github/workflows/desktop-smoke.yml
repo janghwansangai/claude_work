@@ -24,10 +24,6 @@ jobs:
             arch: arm64
           - os: macos-15-intel    # Intel
             arch: x64
-          # 비교 실험: 앱 표시 이름을 영문으로 바꿔 만든 앱(지금 코드로 만들 때만)
-          - os: macos-latest
-            arch: arm64
-            extra: '-c.productName=PracticeRecorder'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -49,12 +45,11 @@ jobs:
         if: inputs.release_tag == ''
         run: |
           npm ci
-          cd packages/desktop && npm run build && npx electron-builder --mac dir --${{ matrix.arch }} --publish never ${{ matrix.extra }}
+          cd packages/desktop && npm run build && npm run pack:mac -- --dir --${{ matrix.arch }}
           cp -R release/mac*/*.app /Applications/
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: 켜서 25초 동안 살아 있는지 확인
-        if: inputs.release_tag == '' || matrix.extra == ''
         shell: bash {0}
         run: |
           APP=$(ls -d /Applications/WalkSim.app /Applications/실습*.app 2>/dev/null | head -1)

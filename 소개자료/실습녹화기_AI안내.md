@@ -65,7 +65,7 @@
 |---|---|
 | ZIP을 더블클릭하면 빈 화면 | 정상. 웹서버(Cloudflare 등)에 올리거나 `python3 -m http.server`로 열어야 함 |
 | Mac에서 권한을 켰는데 계속 요청 | 앱을 응용 프로그램 폴더로 옮김 → ⌘Q 후 재실행 → 안내 창의 '권한 다시 설정' |
-| Mac "확인되지 않은 개발자" | 우클릭 → 열기, 또는 `xattr -cr "/Applications/실습 녹화기.app"` |
+| Mac "확인되지 않은 개발자" | 우클릭 → 열기, 또는 `xattr -cr "/Applications/WalkSim.app"` |
 | Windows "PC 보호" 경고 | 추가 정보 → 실행 (코드 서명 인증서 없이 배포) |
 | 학생용 ZIP을 편집기에서 열기 | 불가. 편집은 `.walksim` 파일로 |
 | 어떤 도구를 쓸지 | 웹사이트 = Chrome 확장, 그 외 모든 프로그램 = 데스크톱 앱 |

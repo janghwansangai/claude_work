@@ -1,6 +1,6 @@
 {
   "name": "@walksim/desktop",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "실습 녹화기 — 데스크톱 녹화기 + 편집기 (Windows / macOS)",
   "author": "다있쌤 로디",
@@ -10,8 +10,9 @@
     "start": "npm run build && electron .",
     "test": "node build.js --tests-only && node --test dist-test/*.test.mjs",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never",
-    "dist:mac": "npm run build && electron-builder --mac --x64 --arm64 --publish never",
-    "dist:linux": "npm run build && electron-builder --linux dir --publish never"
+    "dist:mac": "npm run build && npm run pack:mac -- --x64 --arm64",
+    "dist:linux": "npm run build && electron-builder --linux dir --publish never",
+    "pack:mac": "electron-builder --mac --publish never -c.productName=PracticeRecorder"
   },
   "dependencies": {
     "electron-updater": "^6.8.11"
@@ -75,7 +76,8 @@
       "artifactName": "PracticeRecorder-Mac-${arch}-${version}.${ext}",
       "hardenedRuntime": false,
       "extendInfo": {
-        "NSScreenCaptureUsageDescription": "실습 화면을 녹화하려면 화면 기록 권한이 필요합니다."
+        "NSScreenCaptureUsageDescription": "실습 화면을 녹화하려면 화면 기록 권한이 필요합니다.",
+        "CFBundleDisplayName": "실습 녹화기"
       }
     },
     "linux": {
