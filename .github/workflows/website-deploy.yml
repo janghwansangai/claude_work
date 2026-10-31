@@ -28,7 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 도구 확인
-        run: for t in git python3 zip unzip bash; do printf '%s: ' $t; command -v $t || echo '없음'; done; node -v; npm -v; locale 2>/dev/null | head -2 || true
+        run: |
+          for t in git python3 zip unzip bash; do printf '%s = ' "$t"; command -v "$t" || echo '없음'; done
+          node -v; npm -v
       - name: 의존성 설치 (Workers Builds와 같은 명령)
         run: npm clean-install --progress=false
       - name: 배포 명령 시험 (npx wrangler deploy --dry-run)
