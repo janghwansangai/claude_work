@@ -4,8 +4,8 @@
 # Cloudflare(GitHub 연동) 빌드 서버에서도 그대로 돈다: 빌드 명령 `bash website/build.sh`, 결과 폴더 `website/dist`.
 set -euo pipefail
 cd "$(dirname "$0")"
-# zip/unzip이 없는 빌드 환경에서는 python으로 대신한다
-unzip_to() { if command -v unzip > /dev/null; then unzip -q "$1" -d "$2"; else python3 -m zipfile -e "$1" "$2"; fi; }
+# 압축 풀기는 Node만으로 한다(Cloudflare 빌드 서버에는 unzip·python이 없을 수 있다)
+unzip_to() { node unzip.cjs "$1" "$2"; }
 ROOT=..
 KIT="$ROOT/실습녹화기_최종본"
 IMG="$KIT/1_설명서/images"
