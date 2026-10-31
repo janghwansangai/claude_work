@@ -1,0 +1,62 @@
+# 실습 녹화기 소개 사이트를 Cloudflare에 배포한다.
+# 처음 한 번: 저장소 Settings → Secrets and variables → Actions 에
+#   CLOUDFLARE_API_TOKEN  (Cloudflare → 내 프로필 → API 토큰 → "Edit Cloudflare Workers" 템플릿)
+#   CLOUDFLARE_ACCOUNT_ID (Cloudflare 계정 홈 → 계정 ID)
+# 를 넣으면, website/ 나 설명서가 바뀔 때마다 자동으로 올라간다. 비밀값이 없으면 빌드만 하고 건너뛴다.
+name: 소개 사이트 배포
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main', 'claude/**']
+    paths: ['website/**', '실습녹화기_최종본/**', 'wrangler.jsonc', '.github/workflows/website-deploy.yml']
+
+concurrency:
+  group: website-deploy
+  cancel-in-progress: true
+
+jobs:
+  # Cloudflare Workers Builds가 하는 일을 그대로 흉내 낸다(루트에서 npm clean-install → npx wrangler deploy).
+  # 도구가 적은 이미지(node:22-slim: python·zip·unzip 없음)에서도 통과해야 한다.
+  cloudflare-build-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['node:22-slim', 'node:22']
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 도구 확인
+        run: for t in git python3 zip unzip bash; do printf '%s: ' $t; command -v $t || echo '없음'; done; node -v; npm -v; locale 2>/dev/null | head -2 || true
+      - name: 의존성 설치 (Workers Builds와 같은 명령)
+        run: npm clean-install --progress=false
+      - name: 배포 명령 시험 (npx wrangler deploy --dry-run)
+        run: npx --yes wrangler deploy --dry-run 2>&1 | tail -40
+        shell: bash -o pipefail {0}
+      - name: 미리보기 배포 명령 시험 (npx wrangler versions upload --dry-run)
+        run: npx --yes wrangler versions upload --dry-run 2>&1 | tail -20
+        shell: bash -o pipefail {0}
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bash website/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 실습녹화기-소개사이트
+          path: website/dist
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID 비밀값이 없어 배포를 건너뜁니다(빌드 결과는 Artifacts에 있습니다)."
+            exit 0
+          fi
+          npx --yes wrangler@4 deploy

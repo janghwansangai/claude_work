@@ -1,0 +1,9 @@
+// Cloudflare 배포 설정 — 소개 사이트(website/)를 정적 파일 Worker로 올린다.
+// Cloudflare의 GitHub 연동(기본값: 루트 디렉터리 /, 배포 명령 `npx wrangler deploy`)과
+// GitHub Actions "소개 사이트 배포"가 함께 쓴다. 이름은 Cloudflare 화면의 Worker 이름과 같아야 한다.
+{
+  "name": "claude-work",
+  "compatibility_date": "2026-09-01",
+  "build": { "command": "bash website/build.sh" },
+  "assets": { "directory": "./website/dist" }
+}
