@@ -16,7 +16,7 @@ interface Props {
   resolveAsset: (path: string | undefined) => string;
   mode: PlayMode;
   onExit: () => void;
-  host?: 'desktop';        // 데스크톱 앱 '따라 하기' 창의 왼쪽: 링크는 앱이 오른쪽에 연다
+  host?: 'desktop';        // 데스크톱 앱 창: 링크는 앱이 연다(따라 하기 창은 오른쪽 칸, 미리보기 창은 기본 웹브라우저)
   initialSplit?: boolean;
   banner?: ReactNode; // 미리보기 표시 등
 }
@@ -56,7 +56,7 @@ export function Player({ manifest, resolveAsset, mode, onExit, host, initialSpli
     if (initialSplit && host !== 'desktop') setSplit(manifest.steps.find(s => s.url)?.url ?? null);
   }, [initialSplit, host, manifest]);
 
-  // 링크 열기: 데스크톱 앱은 오른쪽 브라우저에, 넓은 화면은 나란히 보기에, 좁은 화면은 새 탭에 연다.
+  // 링크 열기: 데스크톱 앱은 앱에 맡기고, 넓은 화면은 나란히 보기에, 좁은 화면은 새 탭에 연다.
   const openLink = (url: string) => {
     if (host === 'desktop') { window.open(url, 'walksim-real'); return; }
     if (split !== false || wide) { setSplit(url); return; }

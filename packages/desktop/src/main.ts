@@ -589,9 +589,37 @@ function openSplit(lessonUrl: string | null = null) {
   ));
 }
 
+// ---------- 미리보기(학생 화면만) ----------
+// 따라 하기 창과 달리 실제 사이트 칸 없이 지금 프로젝트의 학생 화면만 크게 연다.
+// 안내의 🔗 링크(실제 사이트 주소)는 기본 웹브라우저로 연다.
+let previewWin: BrowserWindow | null = null;
+
+function openPreviewWindow() {
+  if (previewWin) {
+    void previewWin.loadURL(PREVIEW_GUIDE);
+    previewWin.show();
+    previewWin.focus();
+    return;
+  }
+  const win = new BrowserWindow({
+    width: 1280, height: 860, title: '실습 녹화기 — 미리보기', backgroundColor: '#111827',
+    webPreferences: { contextIsolation: true, sandbox: true },
+  });
+  previewWin = win;
+  lockDown(win, 'walksim://app/player/');
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isWebUrl(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.on('page-title-updated', e => e.preventDefault()); // 창 제목은 '실습 녹화기 — 미리보기'로 유지
+  win.on('closed', () => { previewWin = null; });
+  void win.loadURL(PREVIEW_GUIDE);
+}
+
 function registerSplitIpc() {
   const fromBar = (e: Electron.IpcMainEvent) => !!split && e.sender === split.win.webContents;
   ipcMain.handle('split:open', e => { if (e.sender === editorWin?.webContents) openSplit(null); });
+  ipcMain.handle('preview:open', e => { if (e.sender === editorWin?.webContents) openPreviewWindow(); });
   ipcMain.on('split:go', (e, url: unknown) => { if (fromBar(e) && typeof url === 'string') openReal(url); });
   ipcMain.on('split:back', e => { if (fromBar(e)) split!.real.webContents.navigationHistory.goBack(); });
   ipcMain.on('split:forward', e => { if (fromBar(e)) split!.real.webContents.navigationHistory.goForward(); });
@@ -613,6 +641,7 @@ function registerSplitIpc() {
 function currentScreen(): string {
   const focused = BrowserWindow.getFocusedWindow();
   if (focused && split?.win === focused) return '데스크톱 앱 · 따라 하기 창';
+  if (focused && previewWin === focused) return '데스크톱 앱 · 미리보기 창';
   if (rec) return '데스크톱 앱 · 녹화 중';
   return '데스크톱 앱 · 편집기';
 }

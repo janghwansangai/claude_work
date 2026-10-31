@@ -7,14 +7,23 @@ import { desktop, isExtensionPage } from './captureSource';
 // 검수 전 원본은 보내지 않는다. 네트워크를 거치지 않는다.
 export const PREVIEW_CHANNEL = 'walksim-preview';
 
-interface DesktopSplit { openSplit?: () => Promise<void> }
-const desktopSplit = desktop as (typeof desktop & DesktopSplit) | undefined;
+interface DesktopPreview { openSplit?: () => Promise<void>; openPreview?: () => Promise<void> }
+const desktopPreview = desktop as (typeof desktop & DesktopPreview) | undefined;
 
-export const previewAvailable = isExtensionPage || !!desktopSplit?.openSplit;
+export const previewAvailable = isExtensionPage || !!desktopPreview?.openSplit;
 
-export function openPreview() {
-  if (desktopSplit?.openSplit) { void desktopSplit.openSplit(); return; }
-  window.open(new URL('../player/index.html?preview=1', location.href).href, '_blank', 'noopener');
+/**
+ * 'preview': 학생 화면만 크게 연다.
+ * 'follow' : 따라 하기 — 왼쪽 학생 화면 + 오른쪽 실제 사이트(데스크톱 앱은 전용 창, 크롬 확장은 학생 화면의 나란히 보기).
+ */
+export function openPreview(kind: 'preview' | 'follow' = 'preview') {
+  if (desktopPreview?.openSplit) {
+    if (kind === 'preview' && desktopPreview.openPreview) void desktopPreview.openPreview();
+    else void desktopPreview.openSplit();
+    return;
+  }
+  const query = kind === 'follow' ? '?preview=1&split=1' : '?preview=1';
+  window.open(new URL(`../player/index.html${query}`, location.href).href, '_blank', 'noopener');
 }
 
 export function usePreviewServer(manifest: Manifest, getImage: (assetId: string) => Blob | undefined) {

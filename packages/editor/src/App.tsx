@@ -396,14 +396,24 @@ function App() {
             📁 프로젝트 (새로·열기·저장)
           </button>
           {previewAvailable && (
-            <button
-              onClick={() => openPreview()}
-              disabled={!hydrated || manifest.steps.length === 0}
-              title="학생 화면으로 미리 해 보고, 실제 사이트와 나란히 놓고 따라 할 수 있습니다"
-              className="bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md font-medium hover:bg-gray-100 transition text-sm disabled:opacity-40"
-            >
-              ▶ 미리보기·따라 하기
-            </button>
+            <>
+              <button
+                onClick={() => openPreview('preview')}
+                disabled={!hydrated || manifest.steps.length === 0}
+                title="녹화한 실습을 학생 화면 그대로, 창 전체 크기로 미리 해 봅니다"
+                className="bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md font-medium hover:bg-gray-100 transition text-sm disabled:opacity-40"
+              >
+                ▶ 미리보기
+              </button>
+              <button
+                onClick={() => openPreview('follow')}
+                disabled={!hydrated || manifest.steps.length === 0}
+                title="왼쪽에 학생 화면, 오른쪽에 실제 사이트를 나란히 놓고 따라 합니다"
+                className="bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md font-medium hover:bg-gray-100 transition text-sm disabled:opacity-40"
+              >
+                ↔ 따라 하기
+              </button>
+            </>
           )}
           <button
             onClick={() => setView({ kind: 'safety' })}
