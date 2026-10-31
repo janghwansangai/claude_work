@@ -42,3 +42,14 @@
     })
     .catch(function () { /* 오프라인·요청 제한: 기본 링크 사용 */ });
 })();
+
+// 오류 신고 메뉴: 위젯이 있으면 위젯 창을, 없으면(차단·로딩 실패) 오류 신고 페이지를 새 탭으로 연다.
+(function () {
+  var link = document.getElementById('bug-report');
+  if (!link) return;
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (window.BugReporter && typeof window.BugReporter.open === 'function') { window.BugReporter.open(); return; }
+    window.open('https://script.google.com/macros/s/AKfycbxsRD7vRlEP9oKlvlDDPww8cYaDadTTIp1KrqYWSVU5qE5_gUh3bNUskBhHDlXH6FskvA/exec?app=practicerecorder&v=1.1.0&where=' + encodeURIComponent('소개 사이트'), '_blank', 'noopener');
+  });
+})();

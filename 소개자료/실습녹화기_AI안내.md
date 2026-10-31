@@ -10,6 +10,7 @@
 | 항목 | 내용 |
 |---|---|
 | 표시 이름 | 실습 녹화기 (영문 파일명: PracticeRecorder, 개발 코드명: WalkSim) |
+| 제작자 | 다있쌤 로디 |
 | 대상 사용자 | 초·중·고 교사 (녹화·편집), 학생 (실습) |
 | 가격 | 무료 |
 | 지원 환경 | Windows 10/11 64비트, macOS (Apple Silicon·Intel), Chrome 확장 |
@@ -17,6 +18,7 @@
 | 저장소 | https://github.com/janghwansangai/claude_work (공개) |
 | 다운로드 | https://github.com/janghwansangai/claude_work/releases/latest |
 | 언어 | 한국어 UI |
+| 오류 신고 | 편집기 왼쪽 아래 ‘🐞 오류 신고·개선 제안’, 데스크톱 앱 도움말 메뉴, 크롬 확장 팝업, 소개 사이트의 🐞 버튼 → 제작자의 오류 취합 센터(브라우저에서 열림). 버전·화면 이름만 함께 감 |
 
 ## 구성 요소
 1. **데스크톱 앱 (Electron)** — 윈도우·맥의 모든 프로그램을 녹화. 영역 드래그 또는 전체 화면, 다중 모니터 지원. 편집기 포함.

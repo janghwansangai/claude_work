@@ -16,6 +16,7 @@ import { ProjectsDialog } from './components/ProjectsDialog';
 import { SafetyPanel } from './components/SafetyPanel';
 import { isEditableTarget, useUndoHistory } from './history';
 import { openPreview, previewAvailable, usePreviewServer } from './preview';
+import { APP_AUTHOR, APP_NAME, appVersion, openBugReport } from './appInfo';
 
 const SAVE_STATUS_LABEL: Record<SaveStatus, { text: string; className: string }> = {
   loading: { text: '불러오는 중…', className: 'text-gray-400' },
@@ -30,6 +31,7 @@ interface Snapshot { items: InboxItem[]; manifest: Manifest }
 interface Toast { text: string; undo?: boolean; key: number }
 
 const isMod = (e: KeyboardEvent | React.PointerEvent) => e.ctrlKey || e.metaKey;
+const SCREEN_NAME: Record<View['kind'], string> = { inbox: '검수함', step: '단계 편집', safety: '안전 확인·ZIP 내보내기' };
 
 function App() {
   const project = useProject();
@@ -514,6 +516,18 @@ function App() {
               })}
             </ol>
           </section>
+
+          <footer className="p-3 border-t text-[11px] text-gray-400 leading-relaxed" aria-label="프로그램 정보">
+            <p>{APP_NAME} v{appVersion} · 제작: {APP_AUTHOR}</p>
+            <button
+              type="button"
+              onClick={() => openBugReport(SCREEN_NAME[view.kind])}
+              className="mt-1 text-gray-500 hover:text-blue-600 underline"
+              title="오류나 개선할 점을 제작자에게 보냅니다(브라우저에서 열림). 학생 정보·화면은 보내지 않습니다."
+            >
+              🐞 오류 신고·개선 제안
+            </button>
+          </footer>
         </aside>
 
         <main className="flex-1 flex flex-col bg-gray-100 p-6 overflow-y-auto">

@@ -9,6 +9,7 @@ const subscribe = (channel: string) => (cb: (payload: unknown) => void) => {
 
 contextBridge.exposeInMainWorld('walksimDesktop', {
   platform: process.platform,
+  version: ipcRenderer.sendSync('app:version') as string, // 프로그램 정보·오류 신고에 표시할 앱 버전
   ready: () => ipcRenderer.send('editor:ready'),
   onCapture: subscribe('rec:capture'),
   onState: subscribe('rec:state'),

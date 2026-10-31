@@ -1,3 +1,5 @@
+import { APP_AUTHOR, bugReportUrl } from '@walksim/shared/feedback';
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const startBtn = $<HTMLButtonElement>('start-btn');
 const stopBtn = $<HTMLButtonElement>('stop-btn');
@@ -45,5 +47,13 @@ stopBtn.addEventListener('click', async () => {
 });
 
 editorBtn.addEventListener('click', () => chrome.runtime.sendMessage({ action: 'OPEN_EDITOR' }));
+
+// 프로그램 정보·오류 신고: 새 탭으로 제작자의 오류 취합 센터를 연다(버전과 화면 이름만 붙인다).
+const version = chrome.runtime.getManifest().version;
+$('about-text').textContent = `v${version} · 제작: ${APP_AUTHOR}`;
+$('bug-link').addEventListener('click', e => {
+  e.preventDefault();
+  void chrome.tabs.create({ url: bugReportUrl(version, '크롬 확장 팝업') });
+});
 
 void refresh();

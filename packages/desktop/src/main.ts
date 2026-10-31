@@ -2,9 +2,10 @@
 // 교사용 에디터(웹과 동일)를 앱 안에서 열고, 전역 입력 훅 + 화면 스트림으로 "동작 직전 화면"과 동작 종류를 기록한다.
 // 개인정보: 원본 화면은 메모리에서만 다루고 에디터 검수함으로만 전달한다. 디스크·네트워크로 보내지 않는다.
 import {
-  app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, net, protocol, safeStorage, screen, session, shell, systemPreferences,
-  WebContentsView, type Display,
+  app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, net, protocol, safeStorage, screen, session, shell, systemPreferences,
+  WebContentsView, type Display, type MenuItemConstructorOptions,
 } from 'electron';
+import { APP_AUTHOR, APP_NAME, bugReportUrl } from '@walksim/shared/feedback';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -604,8 +605,57 @@ function registerSplitIpc() {
   });
 }
 
+// ---------- 프로그램 정보·오류 신고 (도움말 메뉴) ----------
+// 기본 메뉴(파일·편집·보기·창)는 그대로 두고 도움말에 '오류 신고'와 '프로그램 정보'만 넣는다.
+// 오류 신고는 기본 웹브라우저로 연다(앱 창에 외부 스크립트를 넣지 않는다). 주소에는 버전과 화면 이름만 붙인다.
+function currentScreen(): string {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused && split?.win === focused) return '데스크톱 앱 · 따라 하기 창';
+  if (rec) return '데스크톱 앱 · 녹화 중';
+  return '데스크톱 앱 · 편집기';
+}
+
+function openBugReport() {
+  void shell.openExternal(bugReportUrl(app.getVersion(), currentScreen()));
+}
+
+async function showAbout() {
+  if (process.platform === 'darwin') { app.showAboutPanel(); return; }
+  const { response } = await dialog.showMessageBox({
+    type: 'info',
+    title: `${APP_NAME} 정보`,
+    message: APP_NAME,
+    detail: `버전 ${app.getVersion()}\n제작: ${APP_AUTHOR}\n\n오류나 개선할 점은 도움말 → ‘오류 신고·개선 제안’으로 보내 주세요.`,
+    buttons: ['확인', '오류 신고…'],
+    defaultId: 0,
+  });
+  if (response === 1) openBugReport();
+}
+
+function setupMenu() {
+  app.setAboutPanelOptions({ applicationName: APP_NAME, applicationVersion: app.getVersion(), copyright: `제작: ${APP_AUTHOR}` });
+  const template: MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' } as MenuItemConstructorOptions] : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      label: '도움말',
+      submenu: [
+        { label: '🐞 오류 신고·개선 제안…', click: openBugReport },
+        { type: 'separator' },
+        { label: `${APP_NAME} 정보`, click: () => { void showAbout(); } },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 // ---------- IPC ----------
 function registerIpc() {
+  ipcMain.on('app:version', e => { e.returnValue = app.getVersion(); });
   ipcMain.on('editor:ready', e => {
     if (e.sender !== editorWin?.webContents) return;
     editorReady = true;
@@ -643,6 +693,7 @@ app.whenReady().then(async () => {
   serveApp();
   restrictPermissions();
   registerIpc();
+  setupMenu();
   createEditor();
   app.on('activate', () => { if (!editorWin) createEditor(); });
 });
