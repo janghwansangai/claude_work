@@ -86,9 +86,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download "${{ inputs.release_tag }}" -p "PracticeRecorder-Windows-Setup-*.exe" -D dl
-          ./dl/*.exe //S //D="C:\\smoke\\app"
-          sleep 20
-          ls /c/smoke/app
+          # 무인 설치(/S): 사용자별 기본 위치(%LOCALAPPDATA%\Programs\…)에 설치된다.
+          powershell -NoProfile -Command "Start-Process -FilePath (Get-ChildItem dl\*.exe).FullName -ArgumentList '/S' -Wait"
+          EXE=$(find "$(cygpath "$LOCALAPPDATA")/Programs" -iname WalkSim.exe 2>/dev/null | head -1)
+          echo "설치 위치: $EXE"
+          test -n "$EXE"
+          mkdir -p /c/smoke && cp -R "$(dirname "$EXE")" /c/smoke/app
       - uses: actions/setup-node@v4
         if: inputs.release_tag == ''
         with:
