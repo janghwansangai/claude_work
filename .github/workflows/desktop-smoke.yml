@@ -1,0 +1,115 @@
+# 실습 녹화기 실행 점검(스모크 테스트)
+#  - 릴리스에 올라간 설치 파일(또는 지금 코드로 새로 만든 앱)을 실제 Mac·Windows에서 켜 보고,
+#    25초 동안 꺼지지 않는지 확인한다. 꺼지면 오류 메시지와 크래시 보고서를 기록에 남긴다.
+name: 실습 녹화기 실행 점검
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '점검할 릴리스 태그(예: desktop-v1.2.0). 비워 두면 지금 코드로 앱을 새로 만들어 점검합니다.'
+        required: false
+        default: ''
+  push:
+    branches: ['claude/**']
+    paths: ['packages/desktop/**', 'packages/shared/**', 'package-lock.json', '.github/workflows/desktop-smoke.yml']
+
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest      # Apple Silicon
+            arch: arm64
+          - os: macos-15-intel    # Intel
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 릴리스 설치 파일 받기
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ inputs.release_tag }}" -p "PracticeRecorder-Mac-${{ matrix.arch }}-*.dmg" -D dl
+          hdiutil attach dl/*.dmg -nobrowse -mountpoint /tmp/dmg
+          cp -R /tmp/dmg/*.app /Applications/
+          hdiutil detach /tmp/dmg
+      - uses: actions/setup-node@v4
+        if: inputs.release_tag == ''
+        with:
+          node-version: 22
+          cache: npm
+      - name: 지금 코드로 앱 만들기
+        if: inputs.release_tag == ''
+        run: |
+          npm ci
+          cd packages/desktop && npm run build && npx electron-builder --mac dir --${{ matrix.arch }} --publish never
+          cp -R release/mac*/*.app /Applications/
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: 켜서 25초 동안 살아 있는지 확인
+        run: |
+          APP=$(ls -d /Applications/WalkSim.app /Applications/실습*.app 2>/dev/null | head -1)
+          echo "앱: $APP"
+          /usr/libexec/PlistBuddy -c Print "$APP/Contents/Info.plist" | grep -E "CFBundle(Name|Executable|ShortVersion)|ElectronAsar" || true
+          ls "$APP/Contents/Frameworks"
+          codesign --verify --deep --strict "$APP" && echo "서명 확인 OK" || echo "서명 확인 실패"
+          xattr -cr "$APP"
+          BIN="$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Contents/Info.plist")"
+          export WALKSIM_SMOKE=1
+          "$BIN" --enable-logging=stderr > run.log 2>&1 &
+          PID=$!
+          sleep 25
+          if kill -0 $PID 2>/dev/null; then
+            echo "✅ 25초 동안 실행 유지"; STATUS=0; kill $PID; sleep 2; kill -9 $PID 2>/dev/null || true
+          else
+            wait $PID; echo "❌ 실행 중 종료됨 (코드 $?)"; STATUS=1
+          fi
+          echo "----- 실행 로그 -----"; tail -n 200 run.log
+          echo "----- 크래시 보고서 -----"
+          for f in $(ls -t ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -2); do echo "== $f"; head -c 6000 "$f"; echo; done
+          exit $STATUS
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: 릴리스 설치 파일 받기
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ inputs.release_tag }}" -p "PracticeRecorder-Windows-Setup-*.exe" -D dl
+          ./dl/*.exe //S //D="C:\\smoke\\app"
+          sleep 20
+          ls /c/smoke/app
+      - uses: actions/setup-node@v4
+        if: inputs.release_tag == ''
+        with:
+          node-version: 22
+          cache: npm
+      - name: 지금 코드로 앱 만들기
+        if: inputs.release_tag == ''
+        run: |
+          npm ci
+          cd packages/desktop && npm run build && npx electron-builder --win dir --x64 --publish never
+          mkdir -p /c/smoke && cp -R release/win-unpacked /c/smoke/app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: 켜서 25초 동안 살아 있는지 확인
+        run: |
+          export WALKSIM_SMOKE=1
+          /c/smoke/app/WalkSim.exe --enable-logging=stderr > run.log 2>&1 &
+          sleep 25
+          if tasklist | grep -i walksim.exe; then
+            echo "✅ 25초 동안 실행 유지"; STATUS=0; taskkill //F //IM WalkSim.exe || true
+          else
+            echo "❌ 실행 중 종료됨"; STATUS=1
+          fi
+          echo "----- 실행 로그 -----"; tail -n 200 run.log
+          exit $STATUS
