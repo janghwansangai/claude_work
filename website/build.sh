@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 소개 사이트를 dist/ 로 모은다: 페이지 + 설명서 그림 + 설명서 PDF + 크롬 확장 + 체험용 예제 실습.
 # 사용: bash website/build.sh   (결과: website/dist, 실습녹화기_최종본/4_소개사이트/실습녹화기-소개사이트.zip)
-# Cloudflare(GitHub 연동) 빌드 서버에서도 그대로 돈다: 빌드 명령 `bash website/build.sh`, 결과 폴더 `website/dist`.
+# 결과 ZIP은 원하는 정적 호스팅에 직접 올리면 된다(자동 업로드는 하지 않는다).
 set -euo pipefail
 cd "$(dirname "$0")"
 # zip/unzip이 없는 빌드 환경에서는 python으로 대신한다
