@@ -24,6 +24,10 @@ jobs:
             arch: arm64
           - os: macos-15-intel    # Intel
             arch: x64
+          # 비교 실험: 앱 표시 이름을 영문으로 바꿔 만든 앱(지금 코드로 만들 때만)
+          - os: macos-latest
+            arch: arm64
+            extra: '-c.productName=PracticeRecorder'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -45,11 +49,13 @@ jobs:
         if: inputs.release_tag == ''
         run: |
           npm ci
-          cd packages/desktop && npm run build && npx electron-builder --mac dir --${{ matrix.arch }} --publish never
+          cd packages/desktop && npm run build && npx electron-builder --mac dir --${{ matrix.arch }} --publish never ${{ matrix.extra }}
           cp -R release/mac*/*.app /Applications/
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: 켜서 25초 동안 살아 있는지 확인
+        if: inputs.release_tag == '' || matrix.extra == ''
+        shell: bash {0}
         run: |
           APP=$(ls -d /Applications/WalkSim.app /Applications/실습*.app 2>/dev/null | head -1)
           echo "앱: $APP"
@@ -65,11 +71,11 @@ jobs:
           if kill -0 $PID 2>/dev/null; then
             echo "✅ 25초 동안 실행 유지"; STATUS=0; kill $PID; sleep 2; kill -9 $PID 2>/dev/null || true
           else
-            wait $PID; echo "❌ 실행 중 종료됨 (코드 $?)"; STATUS=1
+            wait $PID; CODE=$?; echo "❌ 실행 중 종료됨 (코드 $CODE)"; STATUS=1
           fi
           echo "----- 실행 로그 -----"; tail -n 200 run.log
           echo "----- 크래시 보고서 -----"
-          for f in $(ls -t ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -2); do echo "== $f"; head -c 6000 "$f"; echo; done
+          for f in $(ls -t ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -2); do echo "== $f"; head -c 4000 "$f"; echo; python3 -c 'import json,sys;t=open(sys.argv[1]).read().split("\n",1)[1];d=json.loads(t);print("asi:",d.get("asi"));print("ktriageinfo:",d.get("ktriageinfo"));th=d["threads"][d["faultingThread"]];print([f.get("symbol") for f in th["frames"]][:25])' "$f"; done
           exit $STATUS
 
   windows:
