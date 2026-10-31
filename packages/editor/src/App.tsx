@@ -1,18 +1,21 @@
-import { useEffect, useState } from 'react';
-import type { Step } from '@walksim/shared';
-import { parseCapturePayload } from './project';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Manifest, Rect, Step } from '@walksim/shared';
+import { parseCapturePayload, type RectRole } from './project';
 import { burnMasks } from './imaging';
 import { desktop, isExtensionPage, subscribeToCaptures, useEditorLock } from './captureSource';
 import { DesktopRecord } from './components/DesktopRecord';
 
-import { metaOf, useInbox, type InboxItem } from './inbox/useInbox';
+import { metaOf, useInbox, type InboxItem, type InboxPatch } from './inbox/useInbox';
 import { useProject, type SaveStatus } from './storage/useProject';
 import { InboxReview } from './components/InboxReview';
+import { InboxList } from './components/InboxList';
 import { StepEditor } from './components/StepEditor';
 import { downloadBlob } from './export/exportZip';
 import { buildProjectFile, parseProjectFile, projectFileName } from './export/projectFile';
 import { ProjectsDialog } from './components/ProjectsDialog';
 import { SafetyPanel } from './components/SafetyPanel';
+import { isEditableTarget, useUndoHistory } from './history';
+import { openPreview, previewAvailable, usePreviewServer } from './preview';
 
 const SAVE_STATUS_LABEL: Record<SaveStatus, { text: string; className: string }> = {
   loading: { text: '불러오는 중…', className: 'text-gray-400' },
@@ -23,6 +26,10 @@ const SAVE_STATUS_LABEL: Record<SaveStatus, { text: string; className: string }>
 };
 
 type View = { kind: 'inbox'; id: string } | { kind: 'step' } | { kind: 'safety' };
+interface Snapshot { items: InboxItem[]; manifest: Manifest }
+interface Toast { text: string; undo?: boolean; key: number }
+
+const isMod = (e: KeyboardEvent | React.PointerEvent) => e.ctrlKey || e.metaKey;
 
 function App() {
   const project = useProject();
@@ -34,9 +41,38 @@ function App() {
   const [showProjects, setShowProjects] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const anchorRef = useRef(-1);
+  const dragRef = useRef<{ start: number; base: Set<string> } | null>(null);
 
   const { manifest, selectedStepId, images, hydrated, saveStatus } = project;
   const canReceive = hydrated && lock === 'owner';
+
+  // ---------- 되돌리기 ----------
+  const manifestRef = useRef(manifest);
+  manifestRef.current = manifest;
+  const capture = useCallback((): Snapshot => ({ items: inbox.snapshot(), manifest: manifestRef.current }), [inbox]);
+  const applySnapshot = useCallback((s: Snapshot, at: number) => {
+    inbox.restore(s.items, at);
+    project.restoreManifest(s.manifest);
+  }, [inbox, project]);
+  const history = useUndoHistory(capture, applySnapshot);
+
+  const showToast = (text: string, undo = false) => setToast({ text, undo, key: Date.now() });
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const undo = useCallback(() => {
+    const label = history.undo();
+    showToast(label ? `되돌렸습니다: ${label}` : '더 되돌릴 작업이 없습니다.');
+  }, [history]);
+  const redo = useCallback(() => {
+    const label = history.redo();
+    showToast(label ? `다시 실행했습니다: ${label}` : '다시 실행할 작업이 없습니다.');
+  }, [history]);
 
   // 저장된 프로젝트 복원이 끝나고 편집 잠금을 가진 탭만 캡처를 받는다.
   const { add: addToInbox } = inbox;
@@ -53,16 +89,33 @@ function App() {
     });
   }, [canReceive, addToInbox]);
 
-  const inboxIndex = view.kind === 'inbox' ? inbox.items.findIndex(i => i.id === view.id) : -1;
-  const inboxItem = inboxIndex >= 0 ? inbox.items[inboxIndex] : undefined;
+  // 미리보기(학생 화면) 창이 지금 프로젝트를 요청하면 보내 준다.
+  usePreviewServer(manifest, project.getImageBlob);
+
+  const items = inbox.items;
+  const inboxIndex = view.kind === 'inbox' ? items.findIndex(i => i.id === view.id) : -1;
+  const inboxItem = inboxIndex >= 0 ? items[inboxIndex] : undefined;
   const stepIndex = manifest.steps.findIndex(s => s.id === selectedStepId);
   const selectedStep = manifest.steps[stepIndex];
 
+  // 되돌리기 등으로 보고 있던 장면이 사라지면 가까운 장면(또는 단계 편집)으로 옮긴다.
+  useEffect(() => {
+    if (view.kind === 'inbox' && !items.some(i => i.id === view.id)) {
+      setView(items[0] ? { kind: 'inbox', id: items[0].id } : { kind: 'step' });
+    }
+    setSelected(prev => {
+      const alive = new Set([...prev].filter(id => items.some(i => i.id === id)));
+      return alive.size === prev.size ? prev : alive;
+    });
+  }, [items, view]);
 
-  // 캡처(들)를 지금 표시된 가림 상자·지시문 그대로 승인해 단계로 만든다(녹화 순서대로).
-  const approveItems = async (items: InboxItem[]) => {
-    const ordered = [...items].sort((a, b) => a.timestamp - b.timestamp);
+  const openItem = (id: string) => setView({ kind: 'inbox', id });
+
+  // 캡처(들)를 지금 표시된 가림 상자·지시문 그대로 승인해 단계로 만든다(검수함 순서대로).
+  const approveItems = async (list: InboxItem[]) => {
+    const ordered = items.filter(i => list.some(x => x.id === i.id));
     const done = new Set<string>();
+    history.checkpoint(ordered.length > 1 ? `${ordered.length}개 승인` : '승인');
     setBusy(true);
     setError(null);
     try {
@@ -76,6 +129,9 @@ function App() {
           instruction: item.instruction,
           viewport: item.viewport,
           placeholder: item.target?.label,
+          targets: item.targets,
+          annotations: item.annotations,
+          url: item.pageUrl,
         });
         inbox.remove(item.id);
         done.add(item.id);
@@ -87,28 +143,92 @@ function App() {
       setBusy(false);
       setProgress(null);
       setSelected(prev => new Set([...prev].filter(id => !done.has(id))));
-      const rest = inbox.items.filter(i => !done.has(i.id));
-      setView(rest.length > 0 && ordered.length === 1 ? { kind: 'inbox', id: rest[0].id } : { kind: 'step' });
+      const rest = items.filter(i => !done.has(i.id));
+      setView(rest.length > 0 && ordered.length === 1 ? { kind: 'inbox', id: rest[Math.min(inboxIndex, rest.length - 1)]?.id ?? rest[0].id } : { kind: 'step' });
     }
   };
 
-  const approve = () => { if (inboxItem) void approveItems([inboxItem]); };
-
   const discardItems = (ids: string[]) => {
-    ids.forEach(id => inbox.remove(id));
-    setSelected(prev => new Set([...prev].filter(id => !ids.includes(id))));
-    const rest = inbox.items.filter(i => !ids.includes(i.id));
-    setView(rest.length > 0 ? { kind: 'inbox', id: rest[0].id } : { kind: 'step' });
+    if (ids.length === 0) return;
+    history.checkpoint(ids.length > 1 ? `${ids.length}개 버리기` : '버리기');
+    const firstIndex = items.findIndex(i => ids.includes(i.id));
+    inbox.removeMany(ids);
+    const rest = items.filter(i => !ids.includes(i.id));
+    setSelected(new Set());
+    setView(rest.length > 0 ? { kind: 'inbox', id: rest[Math.min(Math.max(0, firstIndex), rest.length - 1)].id } : { kind: 'step' });
+    showToast(`장면 ${ids.length}개를 버렸습니다.`, true);
   };
 
-  const discard = () => { if (inboxItem) discardItems([inboxItem.id]); };
+  const duplicateItem = (id: string) => {
+    history.checkpoint('장면 복제');
+    const copy = inbox.duplicate(id);
+    if (copy) {
+      setView({ kind: 'inbox', id: copy.id });
+      setSelected(new Set([copy.id]));
+      showToast('장면을 복제했습니다. 두 장면을 각각 다른 단계로 다듬으세요.', true);
+    }
+  };
 
-  const selectedItems = inbox.items.filter(i => selected.has(i.id));
+  const moveItem = (id: string, dir: -1 | 1) => {
+    const i = items.findIndex(x => x.id === id);
+    if (i + dir < 0 || i + dir >= items.length) return;
+    history.checkpoint('장면 순서 바꾸기');
+    inbox.move(id, dir);
+  };
+
+  const updateItem = (id: string, patch: InboxPatch) => {
+    const keys = Object.keys(patch);
+    const text = keys.every(k => k === 'instruction');
+    history.checkpoint(text ? '지시사항 수정' : '장면 편집', text ? `text:${id}` : undefined);
+    inbox.update(id, patch);
+  };
+
+  // ---------- 목록 선택(클릭·Ctrl/⌘·Shift·끌기) ----------
+  const range = (a: number, b: number) => new Set(items.slice(Math.min(a, b), Math.max(a, b) + 1).map(i => i.id));
+
+  const onRowDown = (index: number, e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const id = items[index].id;
+    if (e.shiftKey && anchorRef.current >= 0) {
+      const next = range(anchorRef.current, index);
+      setSelected(isMod(e) ? new Set([...selected, ...next]) : next);
+      openItem(id);
+      return;
+    }
+    if (isMod(e)) {
+      const next = new Set(selected);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      setSelected(next);
+      anchorRef.current = index;
+      dragRef.current = { start: index, base: next };
+      return;
+    }
+    setSelected(new Set([id]));
+    anchorRef.current = index;
+    dragRef.current = { start: index, base: new Set() };
+    openItem(id);
+  };
+
+  const onRowEnter = (index: number) => {
+    const d = dragRef.current;
+    if (!d) return;
+    setSelected(new Set([...d.base, ...range(d.start, index)]));
+  };
+
+  useEffect(() => {
+    const end = () => { dragRef.current = null; };
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => { window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
+  }, []);
+
   const toggleSelected = (id: string) => setSelected(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+
+  const selectedItems = items.filter(i => selected.has(i.id));
 
   const approveSelected = () => {
     const n = selectedItems.length;
@@ -116,14 +236,92 @@ function App() {
     if (ok) void approveItems(selectedItems);
   };
 
-  const discardSelected = () => {
-    if (window.confirm(`선택한 ${selectedItems.length}개 캡처를 버릴까요? 되돌릴 수 없습니다.`)) discardItems(selectedItems.map(i => i.id));
-  };
-
+  // ---------- 단계 ----------
   const goToStep = (stepId: string) => { project.setSelectedStepId(stepId); setView({ kind: 'step' }); };
 
+  const updateSelectedStep = (updater: (step: Step) => Step, key?: string) => {
+    if (!selectedStep) return;
+    const id = selectedStep.id;
+    history.checkpoint('단계 편집', key ? `${key}:${id}` : undefined);
+    project.updateManifest(prev => ({ ...prev, steps: prev.steps.map(s => (s.id === id ? updater(s) : s)) }));
+  };
+
+  const setStepRect = (role: RectRole, rect: Rect | undefined) => {
+    if (!selectedStep) return;
+    history.checkpoint(role === 'addHotspot' ? '버튼 추가' : '영역 지정');
+    project.setStepRect(selectedStep.id, role, rect);
+  };
+
+  const duplicateStep = (stepId: string) => {
+    history.checkpoint('단계 복제');
+    if (project.duplicateStep(stepId)) showToast('단계를 복제해 바로 뒤에 넣었습니다.', true);
+  };
+
+  const setEmphasis = (on: boolean) => {
+    history.checkpoint(on ? '강조하기 켜기' : '강조하기 끄기');
+    project.updateManifest(prev => ({ ...prev, emphasis: on || undefined }));
+  };
+
+  // ---------- 키보드 ----------
+  const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  keyRef.current = (e: KeyboardEvent) => {
+    if (lock !== 'owner' || showProjects || busy) return;
+    const key = e.key.toLowerCase();
+    if (isMod(e) && !e.altKey && (key === 'z' || key === 'y')) {
+      if (isEditableTarget(e.target)) return; // 글자 칸 안에서는 브라우저 기본 되돌리기
+      e.preventDefault();
+      if (key === 'y' || e.shiftKey) redo(); else undo();
+      return;
+    }
+    if (isEditableTarget(e.target)) return;
+
+    if (view.kind === 'inbox' && inboxItem) {
+      const i = inboxIndex;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        if (e.altKey) { moveItem(inboxItem.id, dir); return; }
+        const j = Math.min(items.length - 1, Math.max(0, i + dir));
+        const id = items[j].id;
+        if (e.shiftKey) {
+          if (anchorRef.current < 0) anchorRef.current = i;
+          setSelected(range(anchorRef.current, j));
+        } else {
+          setSelected(new Set([id]));
+          anchorRef.current = j;
+        }
+        openItem(id);
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        discardItems(selected.size > 0 ? items.filter(x => selected.has(x.id)).map(x => x.id) : [inboxItem.id]);
+        return;
+      }
+      if (isMod(e) && key === 'd') { e.preventDefault(); duplicateItem(inboxItem.id); return; }
+      if (isMod(e) && key === 'a') { e.preventDefault(); setSelected(new Set(items.map(x => x.id))); return; }
+      if (e.key === 'Escape') { setSelected(new Set()); return; }
+    }
+
+    if (view.kind === 'step' && selectedStep) {
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        const j = Math.min(manifest.steps.length - 1, Math.max(0, stepIndex + (e.key === 'ArrowDown' ? 1 : -1)));
+        project.setSelectedStepId(manifest.steps[j].id);
+        return;
+      }
+      if (isMod(e) && key === 'd') { e.preventDefault(); duplicateStep(selectedStep.id); }
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keyRef.current(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // ---------- 프로젝트 파일 ----------
   const saveProjectFile = async () => {
-    const file = await buildProjectFile(manifest, selectedStepId, project.currentAssets(), inbox.items.map(i => ({ blob: i.blob, meta: metaOf(i) })));
+    const file = await buildProjectFile(manifest, selectedStepId, project.currentAssets(), items.map(i => ({ blob: i.blob, meta: metaOf(i) })));
     downloadBlob(file, projectFileName(manifest.title));
   };
 
@@ -131,16 +329,12 @@ function App() {
     const parsed = await parseProjectFile(file);
     await project.importProject(parsed.manifest, parsed.assets, parsed.selectedStepId);
     if (parsed.pending.length > 0) inbox.addRestored(parsed.pending);
+    history.clear();
     setView({ kind: 'step' });
   };
 
-  const updateSelectedStep = (updater: (step: Step) => Step) => {
-    if (!selectedStep) return;
-    const id = selectedStep.id;
-    project.updateManifest(prev => ({ ...prev, steps: prev.steps.map(s => (s.id === id ? updater(s) : s)) }));
-  };
-
   const status = SAVE_STATUS_LABEL[saveStatus];
+  const emphasis = !!manifest.emphasis;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 text-gray-900">
@@ -160,9 +354,9 @@ function App() {
           currentId={manifest.id}
           currentTitle={manifest.title}
           onClose={() => setShowProjects(false)}
-          onNew={async () => { await project.newProject(); setView({ kind: 'step' }); }}
-          onOpen={async id => { await project.openProject(id); setView({ kind: 'step' }); }}
-          onDelete={id => project.removeProject(id)}
+          onNew={async () => { await project.newProject(); history.clear(); setView({ kind: 'step' }); }}
+          onOpen={async id => { await project.openProject(id); history.clear(); setView({ kind: 'step' }); }}
+          onDelete={async id => { await project.removeProject(id); if (id === manifest.id) history.clear(); }}
           onSaveFile={saveProjectFile}
           onOpenFile={openProjectFile}
         />
@@ -180,13 +374,17 @@ function App() {
             type="text"
             aria-label="프로젝트 제목"
             value={manifest.title}
-            onChange={e => { const title = e.target.value; project.updateManifest(prev => ({ ...prev, title })); }}
+            onChange={e => { const title = e.target.value; history.checkpoint('제목 수정', 'title'); project.updateManifest(prev => ({ ...prev, title })); }}
             disabled={!hydrated}
             className="border-gray-300 border rounded px-3 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
           <span className={`text-xs whitespace-nowrap ${status.className}`} role="status">{status.text}</span>
         </div>
         <div className="flex gap-2 shrink-0">
+          <div className="flex rounded-md border border-gray-300 overflow-hidden" role="group" aria-label="되돌리기">
+            <button onClick={undo} disabled={!history.canUndo} title="되돌리기 (Ctrl/⌘+Z)" aria-label="되돌리기" className="px-2.5 py-1.5 text-sm bg-white hover:bg-gray-100 disabled:opacity-30">↶</button>
+            <button onClick={redo} disabled={!history.canRedo} title="다시 실행 (Ctrl/⌘+Shift+Z)" aria-label="다시 실행" className="px-2.5 py-1.5 text-sm bg-white hover:bg-gray-100 border-l disabled:opacity-30">↷</button>
+          </div>
           <button
             onClick={() => setShowProjects(true)}
             disabled={!hydrated}
@@ -194,6 +392,16 @@ function App() {
           >
             📁 프로젝트 (새로·열기·저장)
           </button>
+          {previewAvailable && (
+            <button
+              onClick={() => openPreview()}
+              disabled={!hydrated || manifest.steps.length === 0}
+              title="학생 화면으로 미리 해 보고, 실제 사이트와 나란히 놓고 따라 할 수 있습니다"
+              className="bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md font-medium hover:bg-gray-100 transition text-sm disabled:opacity-40"
+            >
+              ▶ 미리보기·따라 하기
+            </button>
+          )}
           <button
             onClick={() => setView({ kind: 'safety' })}
             className="bg-green-100 text-green-700 px-4 py-1.5 rounded-md font-medium hover:bg-green-200 transition text-sm"
@@ -222,19 +430,19 @@ function App() {
           <section className="p-3 border-b">
             <h2 className="font-semibold text-gray-700 text-sm mb-2 flex items-center gap-2">
               검수함
-              <span className={`text-xs px-1.5 rounded-full ${inbox.items.length ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
-                {inbox.items.length}
+              <span className={`text-xs px-1.5 rounded-full ${items.length ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                {items.length}
               </span>
             </h2>
             {desktop && canReceive && <DesktopRecord bridge={desktop} />}
-            {inbox.items.length > 0 && (
+            {items.length > 0 && (
               <p className={`text-[11px] mb-2 leading-relaxed ${inbox.storage === 'memory-only' ? 'text-red-600' : 'text-gray-400'}`}>
                 {inbox.storage === 'memory-only'
                   ? '⚠ 임시 보관에 실패했습니다. 창을 닫으면 검수 전 캡처가 사라집니다.'
                   : '🔒 이 컴퓨터에 암호화해 보관 중 · 앱을 닫았다가 나중에 검수해도 됩니다'}
               </p>
             )}
-            {inbox.items.length === 0 ? (
+            {items.length === 0 ? (
               <p className="text-xs text-gray-400 leading-relaxed">
                 {desktop
                   ? '녹화한 화면이 여기에 쌓입니다. 개인정보를 가린 뒤 승인하세요.'
@@ -248,41 +456,36 @@ function App() {
                   <label className="flex items-center gap-1.5 text-gray-600">
                     <input
                       type="checkbox"
-                      checked={selectedItems.length === inbox.items.length}
-                      ref={el => { if (el) el.indeterminate = selectedItems.length > 0 && selectedItems.length < inbox.items.length; }}
-                      onChange={e => setSelected(e.target.checked ? new Set(inbox.items.map(i => i.id)) : new Set())}
+                      checked={selectedItems.length === items.length}
+                      ref={el => { if (el) el.indeterminate = selectedItems.length > 0 && selectedItems.length < items.length; }}
+                      onChange={e => setSelected(e.target.checked ? new Set(items.map(i => i.id)) : new Set())}
                     />
                     전체 선택
                   </label>
                   {selectedItems.length > 0 && <span className="text-gray-500">{selectedItems.length}개 선택</span>}
                 </div>
-                {selectedItems.length > 0 && (
+                {selectedItems.length > 1 && (
                   <div className="flex gap-2">
                     <button disabled={busy} onClick={approveSelected} className="flex-1 rounded-md bg-blue-600 text-white text-xs font-semibold py-1.5 disabled:opacity-50">
                       선택 승인 ({selectedItems.length})
                     </button>
-                    <button disabled={busy} onClick={discardSelected} className="flex-1 rounded-md border border-gray-300 text-gray-600 text-xs font-semibold py-1.5 disabled:opacity-50">
+                    <button disabled={busy} onClick={() => discardItems(selectedItems.map(i => i.id))} className="flex-1 rounded-md border border-gray-300 text-gray-600 text-xs font-semibold py-1.5 disabled:opacity-50">
                       선택 버리기
                     </button>
                   </div>
                 )}
-                {inbox.items.map((item, i) => (
-                  <div
-                    key={item.id}
-                    className={`flex gap-2 items-center p-1.5 rounded border ${view.kind === 'inbox' && view.id === item.id ? 'border-amber-400 bg-amber-50' : 'border-transparent hover:bg-gray-50'}`}
-                  >
-                    <input type="checkbox" aria-label={`검수 필요 #${i + 1} 선택`} checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)} />
-                    <button onClick={() => setView({ kind: 'inbox', id: item.id })} className="flex gap-2 items-center text-left min-w-0">
-                      {/* 썸네일은 흐리게 표시해 검수 전 원본이 목록에서 그대로 보이지 않게 한다 */}
-                      <img src={item.url} alt="" className="w-14 h-9 object-cover rounded blur-sm shrink-0" />
-                      <span className="text-xs min-w-0">
-                        <span className="text-amber-600 font-semibold">검수 필요 #{i + 1}</span>
-                        {item.masks.length > 0 && <span className="text-gray-400"> · 가림 {item.masks.length}</span>}
-                        <span className="block text-gray-500 truncate">{item.instruction}</span>
-                      </span>
-                    </button>
-                  </div>
-                ))}
+                <InboxList
+                  items={items}
+                  currentId={view.kind === 'inbox' ? view.id : null}
+                  selected={selected}
+                  onRowDown={onRowDown}
+                  onRowEnter={onRowEnter}
+                  onToggle={toggleSelected}
+                  onDiscard={id => discardItems([id])}
+                />
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  ↑↓ 이동 · Shift+클릭/끌기 연속 선택 · Ctrl/⌘+클릭 여러 개 · Alt(⌥)+↑↓ 순서 옮기기 · Delete 버리기 · Ctrl/⌘+D 복제 · Ctrl/⌘+Z 되돌리기
+                </p>
               </div>
             )}
           </section>
@@ -317,22 +520,25 @@ function App() {
           {view.kind === 'safety' ? (
             <SafetyPanel
               manifest={manifest}
-              pendingInbox={inbox.items.length}
+              pendingInbox={items.length}
               hasImage={assetId => !!images[assetId]}
               getImage={project.getImageBlob}
               onGoToStep={goToStep}
-              onGoToInbox={() => inbox.items[0] && setView({ kind: 'inbox', id: inbox.items[0].id })}
+              onGoToInbox={() => items[0] && setView({ kind: 'inbox', id: items[0].id })}
             />
           ) : inboxItem ? (
             <InboxReview
               key={inboxItem.id}
               item={inboxItem}
               position={inboxIndex + 1}
-              total={inbox.items.length}
+              total={items.length}
               busy={busy}
-              onChange={patch => inbox.update(inboxItem.id, patch)}
-              onApprove={approve}
-              onDiscard={discard}
+              emphasis={emphasis}
+              onToggleEmphasis={setEmphasis}
+              onChange={patch => updateItem(inboxItem.id, patch)}
+              onApprove={() => void approveItems([inboxItem])}
+              onDiscard={() => discardItems([inboxItem.id])}
+              onDuplicate={() => duplicateItem(inboxItem.id)}
             />
           ) : selectedStep ? (
             <StepEditor
@@ -341,11 +547,17 @@ function App() {
               step={selectedStep}
               index={stepIndex}
               image={images[selectedStep.assetId]}
+              emphasis={emphasis}
+              onToggleEmphasis={setEmphasis}
               onUpdate={updateSelectedStep}
-              onSetRect={(role, rect) => project.setStepRect(selectedStep.id, role, rect)}
-              onApplyMasks={masks => project.addMasksToStep(selectedStep.id, masks)}
+              onSetRect={setStepRect}
+              onApplyMasks={masks => { history.checkpoint('가림 추가'); return project.addMasksToStep(selectedStep.id, masks); }}
+              onDuplicate={() => duplicateStep(selectedStep.id)}
               onDelete={() => {
-                if (window.confirm('이 단계를 삭제할까요? 앞뒤 단계는 자동으로 이어집니다.')) void project.deleteStep(selectedStep.id);
+                if (window.confirm('이 단계를 삭제할까요? 앞뒤 단계는 자동으로 이어집니다. (Ctrl/⌘+Z로 되돌릴 수 있습니다)')) {
+                  history.checkpoint('단계 삭제');
+                  void project.deleteStep(selectedStep.id);
+                }
               }}
             />
           ) : (
@@ -355,6 +567,16 @@ function App() {
           )}
         </main>
       </div>
+
+      {toast && (
+        <div key={toast.key} role="status" className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm rounded-full shadow-lg pl-4 pr-2 py-2 flex items-center gap-3">
+          <span>{toast.text}</span>
+          {toast.undo && history.canUndo && (
+            <button onClick={() => { setToast(null); undo(); }} className="px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 font-semibold">되돌리기</button>
+          )}
+          <button onClick={() => setToast(null)} aria-label="알림 닫기" className="px-1 text-white/60 hover:text-white">×</button>
+        </div>
+      )}
     </div>
   );
 }

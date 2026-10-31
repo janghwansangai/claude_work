@@ -18,6 +18,7 @@ export interface PageSettledMessage {
   seq: number;
   viewport: Viewport;
   suggestedMasks: Rect[];
+  pageUrl?: string; // 출처+경로만(검색어·# 제외)
 }
 
 // 기록하는 것은 동작의 "종류"뿐이다. 입력한 글자·값은 담지 않는다(단축키는 조합 이름만).
@@ -36,6 +37,7 @@ export interface UserActionMessage {
   target: TargetInfo;
   viewport: Viewport;
   suggestedMasks: Rect[];
+  pageUrl?: string;
 }
 
 // 백그라운드 → 에디터. 원본 이미지를 담고 있으므로 WalkSim 에디터 외에는 절대 보내지 않는다.
@@ -47,6 +49,7 @@ export interface CapturePayload {
   suggestedMasks: Rect[];
   action: RecordedAction | null; // null: 녹화 종료 화면
   timestamp: number;
+  pageUrl?: string;
 }
 
 export const EDITOR_PATH = 'editor/index.html';

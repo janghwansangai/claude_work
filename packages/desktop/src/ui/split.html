@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>실습 녹화기 — 따라 하기</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'">
+<style>
+  html, body { margin: 0; height: 100%; background: #111827; font-family: system-ui, -apple-system, "Malgun Gothic", sans-serif; overflow: hidden; }
+  .bar { display: flex; height: 48px; box-sizing: border-box; border-bottom: 1px solid #374151; color: #e5e7eb; font-size: 13px; }
+  .side { display: flex; align-items: center; gap: 6px; padding: 0 8px; box-sizing: border-box; min-width: 0; }
+  .guide { width: var(--guide, 44%); border-right: 4px solid #030712; background: #1f2937; }
+  .real { flex: 1; background: #f3f4f6; color: #111827; }
+  b { white-space: nowrap; }
+  input { flex: 1; min-width: 0; height: 30px; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 6px; padding: 0 8px; font-size: 13px; }
+  .guide input { background: #111827; color: #e5e7eb; border-color: #4b5563; }
+  button { height: 30px; border: 0; border-radius: 6px; padding: 0 10px; font-size: 13px; cursor: pointer; white-space: nowrap; background: #e5e7eb; color: #111827; }
+  .guide button { background: #374151; color: #fff; }
+  button:disabled { opacity: .35; cursor: default; }
+  .err { color: #dc2626; font-size: 12px; white-space: nowrap; }
+</style></head>
+<body>
+  <div class="bar">
+    <div class="side guide">
+      <b>📘 안내</b>
+      <button id="guide-current" title="편집기의 지금 프로젝트를 학생 화면으로 봅니다">지금 프로젝트</button>
+      <input id="guide-url" placeholder="학생용 실습 주소(https://…)로 열기" aria-label="안내 실습 주소">
+      <button id="guide-open">열기</button>
+    </div>
+    <div class="side real">
+      <b>🌐 실제 사이트</b>
+      <button id="back" title="뒤로" aria-label="뒤로" disabled>◀</button>
+      <button id="forward" title="앞으로" aria-label="앞으로" disabled>▶</button>
+      <button id="reload" title="새로 고침" aria-label="새로 고침">⟳</button>
+      <input id="addr" placeholder="주소를 입력하고 Enter (안내의 🔗 링크를 누르면 여기에 열립니다)" aria-label="실제 사이트 주소">
+      <span class="err" id="err" hidden>http/https 주소만 열 수 있습니다</span>
+      <button id="external" title="기본 브라우저에서 열기">↗ 브라우저</button>
+    </div>
+  </div>
+  <script src="split.js"></script>
+</body></html>

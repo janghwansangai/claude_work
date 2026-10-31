@@ -37,8 +37,8 @@ async function buildApp() {
   const node = { bundle: true, platform: 'node', format: 'cjs', target: 'node22', external: ['electron', 'uiohook-napi'] };
   await Promise.all([
     esbuild.build({ ...node, entryPoints: ['src/main.ts'], outfile: 'dist/main.js' }),
-    esbuild.build({ ...node, entryPoints: ['src/preload-editor.ts', 'src/preload-ui.ts'], outdir: 'dist' }),
-    esbuild.build({ bundle: true, platform: 'browser', format: 'iife', target: 'chrome130', entryPoints: ['src/ui/capture.ts', 'src/ui/overlay.ts', 'src/ui/toolbar.ts'], outdir: 'dist/ui' }),
+    esbuild.build({ ...node, entryPoints: ['src/preload-editor.ts', 'src/preload-ui.ts', 'src/preload-split.ts'], outdir: 'dist' }),
+    esbuild.build({ bundle: true, platform: 'browser', format: 'iife', target: 'chrome130', entryPoints: ['src/ui/capture.ts', 'src/ui/overlay.ts', 'src/ui/toolbar.ts', 'src/ui/split.ts'], outdir: 'dist/ui' }),
   ]);
   for (const f of fs.readdirSync('src/ui').filter(f => f.endsWith('.html'))) fs.copyFileSync(`src/ui/${f}`, `dist/ui/${f}`);
   if (!skipApp) {

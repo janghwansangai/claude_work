@@ -6,7 +6,7 @@ import { EDITOR_PATH, type CapturePayload, type PageSettledMessage, type Rect, t
 const MIN_CAPTURE_GAP_MS = 550; // captureVisibleTab은 초당 최대 2회
 const EDITOR_URL = chrome.runtime.getURL(EDITOR_PATH);
 
-interface Frame { tabId: number; seq: number; image: string; viewport: Viewport; suggestedMasks: Rect[] }
+interface Frame { tabId: number; seq: number; image: string; viewport: Viewport; suggestedMasks: Rect[]; pageUrl?: string }
 interface SessionState { recordingTabId?: number; devEditorTabId?: number }
 
 // 최근 안정 화면 몇 장을 번호(seq)별로 보관한다. 더블클릭·입력처럼 동작 판별이 조금 늦게 끝나도 "직전 화면"을 쓸 수 있다.
@@ -130,14 +130,14 @@ async function stopRecording() {
   const image = await captureTab(recordingTabId) ?? last?.image ?? null;
   frames = [];
   if (image && last) {
-    await deliver({ image, rect: null, viewport: last.viewport, target: null, suggestedMasks: last.suggestedMasks, action: null, timestamp: Date.now() });
+    await deliver({ image, rect: null, viewport: last.viewport, target: null, suggestedMasks: last.suggestedMasks, action: null, timestamp: Date.now(), pageUrl: last.pageUrl });
   }
 }
 
 async function onPageSettled(tabId: number, msg: PageSettledMessage) {
   const image = await captureTab(tabId);
   if (image) {
-    frames = [...frames.filter(f => !(f.tabId === tabId && f.seq === msg.seq)), { tabId, seq: msg.seq, image, viewport: msg.viewport, suggestedMasks: msg.suggestedMasks }].slice(-MAX_FRAMES);
+    frames = [...frames.filter(f => !(f.tabId === tabId && f.seq === msg.seq)), { tabId, seq: msg.seq, image, viewport: msg.viewport, suggestedMasks: msg.suggestedMasks, pageUrl: msg.pageUrl }].slice(-MAX_FRAMES);
     missedSettle = null;
   } else {
     missedSettle = { tabId, msg };
@@ -157,6 +157,7 @@ async function onUserAction(tabId: number, msg: UserActionMessage) {
     suggestedMasks: fresh?.suggestedMasks ?? msg.suggestedMasks,
     action: msg.recorded,
     timestamp: Date.now(),
+    pageUrl: fresh?.pageUrl ?? msg.pageUrl,
   });
 }
 

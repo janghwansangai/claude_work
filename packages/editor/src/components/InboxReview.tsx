@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import type { InboxItem } from '../inbox/useInbox';
-import { RectCanvas, type DrawTool } from './RectCanvas';
+import { DEFAULT_ANNOTATION_COLOR, nextBadgeNumber } from '@walksim/shared';
+import type { InboxItem, InboxPatch } from '../inbox/useInbox';
+import { SceneCanvas, isMarkTool, type DrawTool } from './SceneCanvas';
 import { ToolToggle } from './ToolToggle';
+import { EmphasisToggle, LinkField, MarkTools } from './EditTools';
 import { captureShapes, captureTools } from './shapes';
 import { STEP_KIND_LABEL } from '../project';
 
@@ -10,9 +12,12 @@ interface Props {
   position: number;
   total: number;
   busy: boolean;
-  onChange: (patch: Partial<Pick<InboxItem, 'masks' | 'instruction' | 'rect' | 'action'>>) => void;
+  emphasis: boolean;
+  onToggleEmphasis: (on: boolean) => void;
+  onChange: (patch: InboxPatch) => void;
   onApprove: () => void;
   onDiscard: () => void;
+  onDuplicate: () => void;
 }
 
 function recordedLabel(item: InboxItem): string {
@@ -21,25 +26,38 @@ function recordedLabel(item: InboxItem): string {
   if (!item.rect) return STEP_KIND_LABEL.end;
   if (a?.kind === 'type') return a.inputType === 'password' ? '비밀번호 입력(연습용 비밀번호로 대체)' : STEP_KIND_LABEL.input;
   if (a?.kind === 'scroll') return STEP_KIND_LABEL.scroll;
-  return STEP_KIND_LABEL[a?.kind === 'double' || a?.kind === 'right' || a?.kind === 'drag' ? a.kind : 'click'];
+  const base = STEP_KIND_LABEL[a?.kind === 'double' || a?.kind === 'right' || a?.kind === 'drag' ? a.kind : 'click'];
+  return item.targets.length > 0 ? `${base} ${item.targets.length + 1}곳을 순서대로` : base;
 }
 
 // 원본 캡처를 교사가 검수·가림 처리하는 화면. 승인해야만 마스킹이 구워진 이미지가 저장된다.
-export function InboxReview({ item, position, total, busy, onChange, onApprove, onDiscard }: Props) {
+export function InboxReview({ item, position, total, busy, emphasis, onToggleEmphasis, onChange, onApprove, onDiscard, onDuplicate }: Props) {
   const [tool, setTool] = useState<DrawTool>('mask');
+  const [color, setColor] = useState(DEFAULT_ANNOTATION_COLOR);
+  const [badge, setBadge] = useState<number | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const badgeNumber = badge ?? nextBadgeNumber(item.annotations);
 
   return (
-    <div className="max-w-5xl w-full mx-auto bg-white rounded-lg shadow-sm border p-6 flex flex-col gap-5">
+    <div className="max-w-5xl w-full mx-auto bg-white rounded-lg shadow-sm border p-6 flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-amber-600">검수함 {position} / {total} · 아직 프로젝트에 들어가지 않음</p>
           <h2 className="text-lg font-bold text-gray-800">개인정보를 가린 뒤 승인하세요</h2>
           <p className="text-sm text-gray-500 mt-1">
-            이 원본은 이 컴퓨터에 암호화해 보관 중이며 학생용 ZIP에는 들어가지 않습니다. 승인하면 가림 상자가 픽셀에 구워진 이미지만 프로젝트에 저장되고 원본은 지워지며, 버리면 즉시 사라집니다.
+            이 원본은 이 컴퓨터에 암호화해 보관 중이며 학생용 ZIP에는 들어가지 않습니다. 승인하면 가림 상자가 픽셀에 구워진 이미지만 프로젝트에 저장되고 원본은 지워집니다.
           </p>
         </div>
-        <ToolToggle tool={tool} onChange={setTool} options={captureTools(item.rect, item.action)} />
+        <div className="flex gap-2 shrink-0">
+          <button type="button" onClick={onDuplicate} disabled={busy} title="이 장면을 복사해 바로 뒤에 넣습니다 (Ctrl/⌘+D)"
+            className="px-3 py-1.5 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50">
+            ⧉ 복제
+          </button>
+          <button type="button" onClick={onDiscard} disabled={busy} title="필요 없는 장면을 지웁니다 (Delete · 되돌리기 Ctrl/⌘+Z)"
+            className="px-3 py-1.5 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50">
+            🗑 버리기
+          </button>
+        </div>
       </div>
 
       {item.source === 'desktop' && (
@@ -55,24 +73,49 @@ export function InboxReview({ item, position, total, busy, onChange, onApprove, 
         </div>
       )}
 
-      <RectCanvas
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ToolToggle tool={tool} onChange={setTool} options={captureTools(item.rect, item.action)} label="영역 도구" />
+        <EmphasisToggle on={emphasis} onChange={onToggleEmphasis} />
+      </div>
+      <MarkTools
+        tool={tool}
+        onTool={setTool}
+        color={color}
+        onColor={setColor}
+        badgeNumber={badgeNumber}
+        onBadgeNumber={setBadge}
+        count={item.annotations.length}
+        onClearAll={() => onChange({ annotations: [] })}
+      />
+
+      <SceneCanvas
         src={item.url}
         masks={item.masks}
-        shapes={captureShapes(item.rect, item.action)}
+        shapes={captureShapes(item.rect, item.action, item.targets, i => onChange({ targets: item.targets.filter((_, j) => j !== i) }))}
         tool={tool}
+        color={color}
+        badgeNumber={badgeNumber}
+        emphasis={emphasis}
+        annotations={item.annotations}
+        onAddAnnotation={a => {
+          onChange({ annotations: [...item.annotations, a] });
+          if (a.kind === 'badge') setBadge(Math.min(99, a.n + 1));
+        }}
+        onRemoveAnnotation={id => onChange({ annotations: item.annotations.filter(a => a.id !== id) })}
         onDraw={rect => {
           if (tool === 'mask') onChange({ masks: [...item.masks, rect] });
           else if (tool === 'target' && item.action) onChange({ action: { ...item.action, to: rect } });
-          else onChange({ rect });
+          else if (tool === 'button') onChange({ targets: [...item.targets, rect] });
+          else if (!isMarkTool(tool)) onChange({ rect });
         }}
         onRemoveMask={i => onChange({ masks: item.masks.filter((_, j) => j !== i) })}
       />
-      <p className="text-xs text-gray-500 -mt-3">
-        가림 상자 {item.masks.length}개 · 가림 상자에 마우스를 올리면 × 버튼으로 해제할 수 있습니다.
+      <p className="text-xs text-gray-500 -mt-2">
+        가림 상자 {item.masks.length}개 · 가림 상자·추가 버튼에 마우스를 올리면 × 로 지울 수 있습니다.
         {' 기록된 동작: '}
         <b>{recordedLabel(item)}</b>
         {item.rect ? '' : item.action?.kind === 'key' ? '' : ' (녹화 마지막 화면 → 종료 단계)'}
-        {' — 승인 후 단계 편집에서 동작 종류를 바꿀 수 있습니다.'}
+        {tool === 'button' && ' — 학생이 눌러야 할 버튼을 순서대로 드래그하세요. 화면에 1, 2, 3… 번호가 붙습니다.'}
       </p>
 
       <label className="block">
@@ -84,29 +127,21 @@ export function InboxReview({ item, position, total, busy, onChange, onApprove, 
         />
       </label>
 
+      <LinkField value={item.pageUrl} onChange={url => onChange({ pageUrl: url })} />
+
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="w-4 h-4" />
           이미지 전체를 확인했고, 가리지 않은 곳에 실제 개인정보가 없습니다.
         </label>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onDiscard}
-            disabled={busy}
-            className="px-4 py-2 rounded-md text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
-          >
-            버리기
-          </button>
-          <button
-            type="button"
-            onClick={onApprove}
-            disabled={!confirmed || busy}
-            className="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {busy ? '처리 중…' : '가림 적용 후 단계로 추가'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onApprove}
+          disabled={!confirmed || busy}
+          className="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {busy ? '처리 중…' : '가림 적용 후 단계로 추가'}
+        </button>
       </div>
     </div>
   );

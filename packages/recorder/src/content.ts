@@ -34,6 +34,11 @@ const PII_PATTERNS = [
 ];
 const looksSensitive = (text: string) => PII_PATTERNS.some(p => { p.lastIndex = 0; return p.test(text); }) || /\d{5,}/.test(text);
 
+// 분할 화면 링크 초안: 출처+경로만. 검색어(?)·조각(#)에는 토큰·개인정보가 들어 있을 수 있어 보내지 않는다.
+function pageUrl(): string {
+  return `${location.origin}${location.pathname}`;
+}
+
 function viewport(): Viewport {
   return { width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio || 1 };
 }
@@ -145,7 +150,7 @@ function start() {
   const settle = () => {
     firstChangeAt = 0;
     settledSeq = seq;
-    send({ action: 'PAGE_SETTLED', seq, viewport: viewport(), suggestedMasks: detectSensitiveRects() });
+    send({ action: 'PAGE_SETTLED', seq, viewport: viewport(), suggestedMasks: detectSensitiveRects(), pageUrl: pageUrl() });
   };
 
   const changed = () => {
@@ -170,7 +175,7 @@ function start() {
   };
 
   const emit = (snap: Pick<Snapshot, 'frameSeq' | 'masks' | 'viewport'> & { rect: Rect | null; target: TargetInfo }, recorded: RecordedAction) => {
-    send({ action: 'USER_ACTION', frameSeq: snap.frameSeq, rect: snap.rect, recorded, target: snap.target, viewport: snap.viewport, suggestedMasks: snap.masks });
+    send({ action: 'USER_ACTION', frameSeq: snap.frameSeq, rect: snap.rect, recorded, target: snap.target, viewport: snap.viewport, suggestedMasks: snap.masks, pageUrl: pageUrl() });
   };
 
   const inputTypeOf = (el: Element) => (el instanceof HTMLInputElement ? el.type : el instanceof HTMLTextAreaElement ? 'textarea' : 'text');

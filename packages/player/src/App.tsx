@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react';
 import { validateManifest, validateManifestGraph, type Manifest } from '@walksim/shared';
-import { resolveManifestUrl } from './manifestUrl';
+import { resolveAssetUrl, resolveManifestUrl } from './manifestUrl';
 import { MODES, parseMode, type PlayMode } from './modes';
 import { Player } from './Player';
+import { loadPreview } from './preview';
 
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; manifest: Manifest; manifestUrl: URL };
+  | { kind: 'ready'; manifest: Manifest; resolveAsset: (path: string | undefined) => string; warning?: string };
+
+const params = new URLSearchParams(location.search);
+const isPreview = params.get('preview') === '1';
+const host = params.get('host') === 'desktop' ? 'desktop' as const : undefined;
+const startSplit = params.get('split') === '1';
 
 function App() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
@@ -15,6 +21,25 @@ function App() {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (!isPreview) return;
+    // 미리보기: 같은 앱 안의 편집기 창에서 지금 프로젝트를 받아 온다(네트워크 없음).
+    let revoke = () => {};
+    let alive = true;
+    loadPreview()
+      .then(lesson => {
+        if (!alive) { lesson.revoke(); return; }
+        revoke = lesson.revoke;
+        // 편집 중인 프로젝트이므로 연결이 덜 된 단계가 있어도 미리보기는 열고 경고만 보여 준다.
+        const { errors } = validateManifestGraph(lesson.manifest);
+        if (!lesson.manifest.steps.some(s => s.id === lesson.manifest.startStepId)) throw new Error('미리 볼 단계가 없습니다.');
+        setState({ kind: 'ready', manifest: lesson.manifest, resolveAsset: lesson.resolve, warning: errors[0] });
+      })
+      .catch(err => { if (alive) setState({ kind: 'error', message: err instanceof Error ? err.message : '미리보기를 불러오지 못했습니다.' }); });
+    return () => { alive = false; revoke(); };
+  }, [attempt]);
+
+  useEffect(() => {
+    if (isPreview) return;
     const manifestUrl = resolveManifestUrl();
     const controller = new AbortController();
     fetch(manifestUrl, { signal: controller.signal, credentials: 'omit' })
@@ -26,7 +51,7 @@ function App() {
         const manifest = validateManifest(data);
         const { errors } = validateManifestGraph(manifest);
         if (errors.length > 0) throw new Error(`실습 구성에 문제가 있습니다: ${errors[0]}`);
-        setState({ kind: 'ready', manifest, manifestUrl });
+        setState({ kind: 'ready', manifest, resolveAsset: path => resolveAssetUrl(path, manifestUrl) });
       })
       .catch(err => {
         if (controller.signal.aborted) return;
@@ -42,7 +67,7 @@ function App() {
 
   if (state.kind === 'error') {
     return (
-      <div className="h-screen flex flex-col gap-4 items-center justify-center bg-gray-900 text-white p-6 text-center">
+      <div className="h-screen flex flex-col gap-4 items-center justify-center bg-gray-900 text-white p-6 text-center" role="alert">
         <p className="text-red-300 font-semibold">{state.message}</p>
         <button
           onClick={() => { setState({ kind: 'loading' }); setAttempt(a => a + 1); }}
@@ -54,14 +79,32 @@ function App() {
     );
   }
 
-  const { manifest, manifestUrl } = state;
+  const { manifest, resolveAsset } = state;
+  const reload = () => { setMode(null); setState({ kind: 'loading' }); setAttempt(a => a + 1); };
 
   if (!mode) {
-    const suggested = parseMode(new URLSearchParams(location.search).get('mode')) ?? parseMode(manifest.mode) ?? 'practice';
+    const suggested = parseMode(params.get('mode')) ?? (isPreview ? 'guide' : parseMode(manifest.mode) ?? 'practice');
     return <StartScreen manifest={manifest} suggested={suggested} onStart={setMode} />;
   }
 
-  return <Player manifest={manifest} manifestUrl={manifestUrl} mode={mode} onExit={() => setMode(null)} />;
+  return (
+    <Player
+      key={attempt}
+      manifest={manifest}
+      resolveAsset={resolveAsset}
+      mode={mode}
+      host={host}
+      initialSplit={startSplit}
+      onExit={() => setMode(null)}
+      banner={isPreview ? (
+        <p className="bg-indigo-600 text-white text-xs text-center py-1 px-2 flex items-center justify-center gap-3">
+          미리보기 — 편집기의 지금 프로젝트입니다(학생용 ZIP과 같은 화면).
+          {state.warning && <span className="bg-amber-300 text-amber-950 rounded px-1.5">⚠ {state.warning}</span>}
+          <button onClick={reload} className="underline font-semibold">🔄 편집 내용 다시 불러오기</button>
+        </p>
+      ) : undefined}
+    />
+  );
 }
 
 // 실습 시작 화면: 모의 실습이라는 사실을 분명히 알리고 모드를 고른다(PRD §2 핵심 트레이드오프).

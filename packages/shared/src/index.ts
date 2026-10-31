@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AnnotationSchema, MAX_ANNOTATIONS } from './annotations';
 
 // [x, y, w, h] — 캡처 이미지(콘텐츠 영역) 기준 0~1 정규화 좌표
 export const RectSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
@@ -10,18 +11,37 @@ export const AssetPathSchema = z.string().min(1).refine(
   { message: '자산 경로는 배포 패키지 내부의 상대 경로여야 합니다.' },
 );
 
-// 모든 단계의 공통 필드. zoom: 이 단계에서 확대해 보여 줄 영역(Arcade의 Pan & Zoom)
+// 실제 사이트 링크(분할 화면 "실제 사이트와 나란히"에서 연다). http/https만 허용한다.
+export const LinkUrlSchema = z.string().max(2048).refine(isLinkUrl, { message: 'http 또는 https 주소만 쓸 수 있습니다.' });
+
+export function isLinkUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+// 모든 단계의 공통 필드.
+//  zoom: 이 단계에서 확대해 보여 줄 영역(Arcade의 Pan & Zoom)
+//  annotations: 교사가 화면 위에 그린 강조(네모·원·화살표·형광펜·펜·글자·번호). 이미지에 굽지 않고 겹쳐 그린다.
+//  url: 이 화면에 해당하는 실제 사이트 주소(분할 화면에서 오른쪽에 연다)
 const StepBase = z.object({
   id: z.string(),
   assetId: z.string(),
   instruction: z.string(),
   hint: z.string().optional(),
   zoom: RectSchema.optional(),
+  annotations: z.array(AnnotationSchema).max(MAX_ANNOTATIONS).optional(),
+  url: LinkUrlSchema.optional(),
 });
 
 export const ClickActionSchema = z.enum(['click', 'double', 'right']);
 export type ClickAction = z.infer<typeof ClickActionSchema>;
 
+// hotspots가 여러 개면 학생은 1번부터 순서대로 모두 눌러야 하고, 마지막 버튼의 nextStepId로 넘어간다.
+// (편집기는 모든 버튼의 nextStepId를 같게 유지한다.) hotspots가 비어 있으면 종료 화면.
 export const ClickStepSchema = StepBase.extend({
   type: z.literal('click'),
   hotspots: z.array(z.object({
@@ -101,6 +121,8 @@ export const ManifestSchema = z.object({
     dpr: z.number()
   }),
   startStepId: z.string(),
+  // 강조하기: 켜면 학생 화면의 클릭 위치(마우스 표시)와 입력칸을 더 크고 눈에 띄게 보여 준다.
+  emphasis: z.boolean().optional(),
   assets: z.record(AssetPathSchema),
   steps: z.array(StepSchema)
 });
@@ -114,7 +136,7 @@ export function validateManifest(data: unknown): Manifest {
 /** 단계가 이동할 수 있는 다음 단계 ID 목록. 빈 배열이면 종료 단계. */
 export function nextStepIds(step: Step): string[] {
   switch (step.type) {
-    case 'click': return step.hotspots.map(h => h.nextStepId);
+    case 'click': return step.hotspots.length > 0 ? [step.hotspots[step.hotspots.length - 1].nextStepId] : [];
     case 'choice': return step.choices.map(c => c.nextStepId);
     default: return [step.nextStepId];
   }
@@ -141,6 +163,7 @@ export function stepAnchor(step: Step): Rect | undefined {
 }
 
 export * from './keys';
+export * from './annotations';
 
 export interface GraphIssue {
   level: 'error' | 'warning'; // error: 발행을 막아야 함, warning: 교사 확인 필요

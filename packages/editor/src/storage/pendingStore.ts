@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { Rect } from '@walksim/shared';
+import type { Annotation, Rect } from '@walksim/shared';
 import type { CaptureTarget, RecordedAction, Viewport } from '../project';
 
 // 검수 전 캡처 임시 보관함.
@@ -22,6 +22,10 @@ export interface PendingMeta {
   instruction: string;
   timestamp: number;
   mime: string;
+  targets?: Rect[];           // 같은 화면에서 순서대로 누를 추가 버튼
+  annotations?: Annotation[]; // 교사가 그린 강조 표시
+  url?: string;               // 실제 사이트 주소(분할 화면 링크)
+  seq?: number;               // 검수함 순서(장면 이동·복제). 없으면 timestamp
 }
 
 interface PendingRecord {

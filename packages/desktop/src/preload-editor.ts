@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('walksimDesktop', {
   onState: subscribe('rec:state'),
   startRecording: () => ipcRenderer.invoke('rec:start'),
   stopRecording: () => ipcRenderer.invoke('rec:stop'),
+  // 따라 하기: 왼쪽에 지금 프로젝트(학생 화면), 오른쪽에 실제 사이트를 여는 창
+  openSplit: () => ipcRenderer.invoke('split:open'),
   // 검수 전 캡처 임시 보관용 암호화 키를 운영체제 보안 저장소(DPAPI/키체인)로 감싼다.
   secure: {
     protect: (plain: string) => ipcRenderer.invoke('secure:protect', plain),

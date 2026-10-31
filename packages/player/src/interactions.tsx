@@ -3,6 +3,11 @@ import type { ClickAction, Rect, Step } from '@walksim/shared';
 import { Beacon } from './ui';
 import { rectStyle, type Box } from './layout';
 
+/** 강조하기: 누를 곳을 조금 넓혀 누르기 쉽게 한다. */
+export function grow([x, y, w, h]: Rect, dx: number, dy = dx): Rect {
+  return [x - dx, y - dy, w + dx * 2, h + dy * 2];
+}
+
 type Miss = (text: string) => void;
 
 const DOUBLE_CLICK_MS = 450;
@@ -12,8 +17,10 @@ const ACTION_LABEL: Record<ClickAction, string> = { click: '클릭', double: '�
 
 // 클릭·더블클릭·오른쪽 클릭 영역. 실제 <button>이므로 키보드(Enter)로도 누를 수 있다(접근성 대체 조작).
 // 터치 기기: 더블클릭 = 빠르게 두 번 탭, 오른쪽 클릭 = 길게 누르기.
-export function ClickTarget({ rect, action, label, showBeacon, onSuccess, onMiss }: {
-  rect: Rect; action: ClickAction; label: string; showBeacon: boolean; onSuccess: () => void; onMiss: Miss;
+// order: 한 화면에 버튼이 여러 개일 때 순서 번호. state: done(이미 누름) / current(지금 차례) / later(아직 차례 아님)
+export function ClickTarget({ rect, action, label, showBeacon, emphasis, order, state = 'current', onSuccess, onMiss }: {
+  rect: Rect; action: ClickAction; label: string; showBeacon: boolean; emphasis?: boolean;
+  order?: number; state?: 'done' | 'current' | 'later'; onSuccess: () => void; onMiss: Miss;
 }) {
   const lastClick = useRef(0);
   const singleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -22,6 +29,7 @@ export function ClickTarget({ rect, action, label, showBeacon, onSuccess, onMiss
 
   const onClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (state === 'done') return;
     const keyboard = e.detail === 0;
     if (action === 'click' || keyboard) return onSuccess();
     if (action === 'right') return onMiss('마우스 오른쪽 버튼으로 눌러 보세요. (터치: 길게 누르기)');
@@ -50,11 +58,26 @@ export function ClickTarget({ rect, action, label, showBeacon, onSuccess, onMiss
       }}
       onPointerUp={() => clearTimeout(pressTimer.current)}
       onPointerLeave={() => clearTimeout(pressTimer.current)}
-      aria-label={`${label} (${ACTION_LABEL[action]})`}
-      className={`absolute z-10 rounded-md outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 ${showBeacon ? 'ring-2 ring-blue-400 bg-blue-400/15' : 'bg-transparent'}`}
-      style={{ ...rectStyle(rect), touchAction: action === 'right' ? 'none' : undefined }}
+      aria-label={`${order ? `${order}번 ` : ''}${label} (${ACTION_LABEL[action]})${state === 'done' ? ' — 완료' : ''}`}
+      aria-disabled={state === 'done' || undefined}
+      data-state={state}
+      className={`absolute z-10 rounded-md outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 ${
+        !showBeacon ? 'bg-transparent'
+          : state === 'later' ? 'ring-2 ring-blue-300/60 bg-blue-300/10'
+          : state === 'done' ? 'ring-2 ring-green-400/70 bg-green-400/10'
+          : emphasis ? 'ring-4 ring-yellow-300 bg-yellow-200/25 shadow-[0_0_0_6px_rgba(250,204,21,0.35)]' : 'ring-2 ring-blue-400 bg-blue-400/15'
+      }`}
+      style={{ ...rectStyle(emphasis && showBeacon ? grow(rect, 0.006) : rect), touchAction: action === 'right' ? 'none' : undefined }}
     >
-      {showBeacon && <Beacon label={action === 'click' ? undefined : ACTION_LABEL[action]} />}
+      {(showBeacon || state === 'done') && (
+        <Beacon
+          label={action === 'click' || state !== 'current' ? undefined : ACTION_LABEL[action]}
+          order={order}
+          big={emphasis && state === 'current'}
+          dim={state === 'later'}
+          done={state === 'done'}
+        />
+      )}
     </button>
   );
 }
@@ -63,8 +86,8 @@ const inside = ([x, y, w, h]: Rect, px: number, py: number, pad = 0.02) =>
   px >= x - pad && px <= x + w + pad && py >= y - pad && py <= y + h + pad;
 
 // 끌어서 놓기. 마우스/터치로 끌거나, 키보드로 "잡기(Enter) → 놓을 곳(Enter)" 순서로도 할 수 있다(PRD §6.1).
-export function DragInteraction({ step, box, showBeacon, onSuccess, onMiss }: {
-  step: Extract<Step, { type: 'drag' }>; box: Box; showBeacon: boolean; onSuccess: () => void; onMiss: Miss;
+export function DragInteraction({ step, box, showBeacon, emphasis, onSuccess, onMiss }: {
+  step: Extract<Step, { type: 'drag' }>; box: Box; showBeacon: boolean; emphasis?: boolean; onSuccess: () => void; onMiss: Miss;
 }) {
   const [drag, setDrag] = useState<{ x: number; y: number; dx: number; dy: number; moved: boolean } | null>(null);
   const [picked, setPicked] = useState(false);
@@ -103,7 +126,7 @@ export function DragInteraction({ step, box, showBeacon, onSuccess, onMiss }: {
       <button
         aria-label={picked ? '잡은 항목 — 놓을 곳을 고르세요' : `${step.instruction} (끌어서 놓기: 잡기)`}
         aria-pressed={picked}
-        className={`absolute z-10 rounded-md outline-none touch-none cursor-grab active:cursor-grabbing focus-visible:ring-4 focus-visible:ring-yellow-300 ${showBeacon || picked ? 'ring-2 ring-blue-400 bg-blue-400/15' : 'bg-transparent'}`}
+        className={`absolute z-10 rounded-md outline-none touch-none cursor-grab active:cursor-grabbing focus-visible:ring-4 focus-visible:ring-yellow-300 ${showBeacon || picked ? (emphasis ? 'ring-4 ring-yellow-300 bg-yellow-200/25' : 'ring-2 ring-blue-400 bg-blue-400/15') : 'bg-transparent'}`}
         style={rectStyle(step.from)}
         onClick={e => { e.stopPropagation(); if (e.detail === 0) setPicked(p => !p); }}
         onPointerDown={e => {
@@ -128,7 +151,7 @@ export function DragInteraction({ step, box, showBeacon, onSuccess, onMiss }: {
         }}
         onPointerCancel={() => setDrag(null)}
       >
-        {showBeacon && !drag && <Beacon label="끌기" />}
+        {showBeacon && !drag && <Beacon label="끌기" big={emphasis} />}
       </button>
       {picked && (
         <button
@@ -151,8 +174,8 @@ export function DragInteraction({ step, box, showBeacon, onSuccess, onMiss }: {
 }
 
 // 스크롤: 영역 위에서 휠을 굴리거나 손가락으로 밀면 다음 화면으로 넘어간다.
-export function ScrollArea({ step, showBeacon, onSuccess }: {
-  step: Extract<Step, { type: 'scroll' }>; showBeacon: boolean; onSuccess: () => void;
+export function ScrollArea({ step, showBeacon, emphasis, onSuccess }: {
+  step: Extract<Step, { type: 'scroll' }>; showBeacon: boolean; emphasis?: boolean; onSuccess: () => void;
 }) {
   const acc = useRef(0);
   const touch = useRef<{ x: number; y: number } | null>(null);
@@ -165,7 +188,7 @@ export function ScrollArea({ step, showBeacon, onSuccess }: {
   };
   return (
     <div
-      className={`absolute z-10 rounded-md ${showBeacon ? 'ring-2 ring-blue-400 bg-blue-400/10' : ''}`}
+      className={`absolute z-10 rounded-md ${showBeacon ? (emphasis ? 'ring-4 ring-yellow-300 bg-yellow-200/20' : 'ring-2 ring-blue-400 bg-blue-400/10') : ''}`}
       style={{ ...rectStyle(step.rect), touchAction: 'none' }}
       onWheel={e => push(vertical ? e.deltaY : e.deltaX || e.deltaY)}
       onTouchStart={e => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
@@ -177,7 +200,7 @@ export function ScrollArea({ step, showBeacon, onSuccess }: {
       }}
       onClick={e => e.stopPropagation()}
     >
-      {showBeacon && <Beacon label={{ down: '▼ 스크롤', up: '▲ 스크롤', left: '◀ 스크롤', right: '▶ 스크롤' }[step.direction]} />}
+      {showBeacon && <Beacon big={emphasis} label={{ down: '▼ 스크롤', up: '▲ 스크롤', left: '◀ 스크롤', right: '▶ 스크롤' }[step.direction]} />}
     </div>
   );
 }
@@ -193,8 +216,8 @@ function accepts(step: Extract<Step, { type: 'input' }>, value: string): boolean
 
 // 가짜 입력칸. rect가 있으면 캡처 화면 속 입력칸 위치에 겹쳐서, 없으면 가운데 카드로 보여 준다.
 // 비밀번호 연습은 실제 비밀번호를 치지 않도록 "연습용 비밀번호 채우기" 버튼만 제공한다(PRD §6.1).
-export function InputInteraction({ step, box, showHint, onSuccess, onMiss }: {
-  step: Extract<Step, { type: 'input' }>; box: Box; showHint: boolean; onSuccess: () => void; onMiss: Miss;
+export function InputInteraction({ step, box, showHint, emphasis, onSuccess, onMiss }: {
+  step: Extract<Step, { type: 'input' }>; box: Box; showHint: boolean; emphasis?: boolean; onSuccess: () => void; onMiss: Miss;
 }) {
   const [value, setValue] = useState('');
   const password = step.input.mode === 'password-sample';
@@ -226,16 +249,25 @@ export function InputInteraction({ step, box, showHint, onSuccess, onMiss }: {
   );
 
   if (step.rect) {
-    const [, , , h] = step.rect;
-    const fontSize = Math.max(11, Math.min(28, h * box.height * 0.45));
+    // 강조하기: 입력칸을 위아래·옆으로 키우고(최소 44px) 노란 테두리로 눈에 띄게
+    const minH = 44 / box.height;
+    const rect = emphasis
+      ? grow(step.rect, 0.01, Math.max(0.008, (minH - step.rect[3]) / 2))
+      : step.rect;
+    const fontSize = Math.max(emphasis ? 16 : 11, Math.min(emphasis ? 34 : 28, rect[3] * box.height * 0.45));
     return (
       <form onSubmit={submit} onClick={e => e.stopPropagation()}>
-        <div className="absolute z-10" style={rectStyle(step.rect)}>
-          {field('w-full h-full px-2 rounded border-2 border-blue-500 bg-white text-gray-900 outline-none focus:ring-4 focus:ring-blue-300', { fontSize })}
+        <div className="absolute z-10" style={rectStyle(rect)} data-emphasis={emphasis || undefined}>
+          {field(
+            emphasis
+              ? 'w-full h-full px-3 rounded-lg border-4 border-yellow-400 bg-white text-gray-900 font-semibold outline-none shadow-[0_0_0_6px_rgba(250,204,21,0.35)] focus:ring-4 focus:ring-yellow-300'
+              : 'w-full h-full px-2 rounded border-2 border-blue-500 bg-white text-gray-900 outline-none focus:ring-4 focus:ring-blue-300',
+            { fontSize },
+          )}
         </div>
-        <div className="absolute z-10 flex gap-1" style={{ left: `${step.rect[0] * 100}%`, top: `calc(${(step.rect[1] + step.rect[3]) * 100}% + 4px)` }}>
+        <div className="absolute z-10 flex gap-1" style={{ left: `${rect[0] * 100}%`, top: `calc(${(rect[1] + rect[3]) * 100}% + 4px)` }}>
           {fill}
-          <button type="submit" className="text-xs px-2 py-1 rounded bg-blue-600 text-white whitespace-nowrap">확인 ↵</button>
+          <button type="submit" className={`${emphasis ? 'text-sm px-3 py-1.5' : 'text-xs px-2 py-1'} rounded bg-blue-600 text-white whitespace-nowrap`}>확인 ↵</button>
         </div>
       </form>
     );

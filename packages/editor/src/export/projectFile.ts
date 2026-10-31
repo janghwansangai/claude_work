@@ -1,5 +1,5 @@
 import { strToU8, strFromU8, unzipSync, zipSync } from 'fflate';
-import { validateManifest, type Manifest } from '@walksim/shared';
+import { AnnotationSchema, MAX_ANNOTATIONS, isLinkUrl, validateManifest, type Annotation, type Manifest } from '@walksim/shared';
 import { extensionForMime } from '../imaging';
 import type { PendingMeta } from '../storage/pendingStore';
 
@@ -110,5 +110,11 @@ function sanitizeMeta(value: unknown, mime: string): PendingMeta {
     instruction: typeof m.instruction === 'string' ? m.instruction.slice(0, 500) : '',
     timestamp: Number(m.timestamp) || Date.now(),
     mime,
+    targets: Array.isArray(m.targets) ? m.targets.filter(isRect).slice(0, 20) : [],
+    annotations: Array.isArray(m.annotations)
+      ? m.annotations.slice(0, MAX_ANNOTATIONS).flatMap(a => { const r = AnnotationSchema.safeParse(a); return r.success ? [r.data as Annotation] : []; })
+      : [],
+    url: typeof m.url === 'string' && m.url.length <= 2048 && isLinkUrl(m.url) ? m.url : undefined,
+    seq: Number.isFinite(Number(m.seq)) ? Number(m.seq) : undefined,
   };
 }

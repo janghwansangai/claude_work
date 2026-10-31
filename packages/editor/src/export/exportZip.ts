@@ -16,8 +16,12 @@ function stepTexts(step: Step): string[] {
   const texts = [step.instruction, step.hint ?? ''];
   if (step.type === 'input') texts.push(step.input.placeholder ?? '', ...step.input.acceptedValues);
   if (step.type === 'choice') texts.push(...step.choices.map(c => c.label));
+  for (const a of step.annotations ?? []) if (a.kind === 'text') texts.push(a.text);
+  if (step.url) texts.push(safeDecode(step.url));
   return texts;
 }
+
+const safeDecode = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
 
 // 학생에게 보이는 모든 텍스트에서 개인정보 형태를 찾는다(보조 검사 — 이미지 확인은 교사가 직접).
 export function scanTextForPii(manifest: Manifest): GraphIssue[] {

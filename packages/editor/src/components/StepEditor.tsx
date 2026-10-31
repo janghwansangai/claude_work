@@ -1,19 +1,29 @@
 import { useState } from 'react';
-import { formatKeyCombo, normalizeKeyCombo, type Manifest, type Rect, type Step } from '@walksim/shared';
+import { DEFAULT_ANNOTATION_COLOR, formatKeyCombo, nextBadgeNumber, normalizeKeyCombo, type ClickAction, type Manifest, type Rect, type Step } from '@walksim/shared';
 import type { StoredImage } from '../storage/useProject';
-import { STEP_KIND_LABEL, convertStep, isReservedShortcut, stepKind, type RectRole, type StepKind } from '../project';
-import { RectCanvas, type DrawTool } from './RectCanvas';
+import {
+  STEP_KIND_LABEL, convertStep, isReservedShortcut, moveHotspot, removeHotspot, setHotspotAction, stepKind, updateHotspots,
+  type RectRole, type StepKind,
+} from '../project';
+import { SceneCanvas, isMarkTool, type DrawTool } from './SceneCanvas';
 import { ToolToggle } from './ToolToggle';
+import { EmphasisToggle, LinkField, MarkTools } from './EditTools';
 import { stepShapes, stepTools } from './shapes';
+
+/** key가 같으면(예: 같은 칸에 글자 입력) 되돌리기 기록을 하나로 묶는다. */
+type Update = (updater: (step: Step) => Step, key?: string) => void;
 
 interface Props {
   manifest: Manifest;
   step: Step;
   index: number;
   image: StoredImage | undefined;
-  onUpdate: (updater: (step: Step) => Step) => void;
+  emphasis: boolean;
+  onToggleEmphasis: (on: boolean) => void;
+  onUpdate: Update;
   onSetRect: (role: RectRole, rect: Rect | undefined) => void;
   onApplyMasks: (masks: Rect[]) => Promise<void>;
+  onDuplicate: () => void;
   onDelete: () => void;
 }
 
@@ -29,10 +39,16 @@ const KIND_HELP: Record<StepKind, string> = {
   end: '실습이 끝나는 화면입니다. 완료 메시지와 결과가 보입니다.',
 };
 
-export function StepEditor({ manifest, step, index, image, onUpdate, onSetRect, onApplyMasks, onDelete }: Props) {
+export function StepEditor({ manifest, step, index, image, emphasis, onToggleEmphasis, onUpdate, onSetRect, onApplyMasks, onDuplicate, onDelete }: Props) {
   const [tool, setTool] = useState<DrawTool>('primary');
   const [pendingMasks, setPendingMasks] = useState<Rect[]>([]);
   const [applying, setApplying] = useState(false);
+  const [color, setColor] = useState(DEFAULT_ANNOTATION_COLOR);
+  const [badge, setBadge] = useState<number | null>(null);
+  const annotations = step.annotations ?? [];
+  const badgeNumber = badge ?? nextBadgeNumber(annotations);
+  const setAnnotations = (fn: (list: NonNullable<Step['annotations']>) => NonNullable<Step['annotations']>) =>
+    onUpdate(s => { const next = fn(s.annotations ?? []); return { ...s, annotations: next.length ? next : undefined }; });
   const kind = stepKind(step);
   const fallbackNext = manifest.steps[index + 1]?.id ?? '';
 
@@ -48,7 +64,8 @@ export function StepEditor({ manifest, step, index, image, onUpdate, onSetRect, 
 
   const onDraw = (rect: Rect) => {
     if (tool === 'mask') setPendingMasks([...pendingMasks, rect]);
-    else onSetRect(tool === 'target' ? 'target' : tool === 'zoom' ? 'zoom' : 'primary', rect);
+    else if (tool === 'button') onSetRect('addHotspot', rect);
+    else if (!isMarkTool(tool)) onSetRect(tool === 'target' ? 'target' : tool === 'zoom' ? 'zoom' : 'primary', rect);
   };
 
   return (
@@ -73,6 +90,14 @@ export function StepEditor({ manifest, step, index, image, onUpdate, onSetRect, 
           </label>
           <button
             type="button"
+            onClick={onDuplicate}
+            title="이 단계를 복사해 바로 뒤에 넣습니다 (Ctrl/⌘+D)"
+            className="px-3 py-1.5 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-100"
+          >
+            ⧉ 단계 복제
+          </button>
+          <button
+            type="button"
             onClick={onDelete}
             className="px-3 py-1.5 rounded-md text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50"
           >
@@ -86,7 +111,7 @@ export function StepEditor({ manifest, step, index, image, onUpdate, onSetRect, 
         <span className="font-semibold text-gray-800 text-sm">지시사항 (학생에게 보이는 말풍선)</span>
         <textarea
           value={step.instruction}
-          onChange={e => { const instruction = e.target.value; onUpdate(s => ({ ...s, instruction })); }}
+          onChange={e => { const instruction = e.target.value; onUpdate(s => ({ ...s, instruction }), 'instruction'); }}
           className="mt-1 w-full border rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 h-20"
           placeholder="학생에게 보여줄 지시사항을 입력하세요..."
         />
@@ -97,24 +122,46 @@ export function StepEditor({ manifest, step, index, image, onUpdate, onSetRect, 
         <input
           type="text"
           value={step.hint ?? ''}
-          onChange={e => { const hint = e.target.value; onUpdate(s => ({ ...s, hint: hint || undefined })); }}
+          onChange={e => { const hint = e.target.value; onUpdate(s => ({ ...s, hint: hint || undefined }), 'hint'); }}
           className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           placeholder="예: 왼쪽 위의 파란 버튼을 찾아보세요."
         />
       </label>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <ToolToggle tool={tool} onChange={setTool} options={stepTools(step, '추가로 가리기')} />
-        {step.zoom && (
-          <button type="button" onClick={() => onSetRect('zoom', undefined)} className="text-sm text-orange-600 underline">확대 해제</button>
-        )}
+        <ToolToggle tool={tool} onChange={setTool} options={stepTools(step, '추가로 가리기')} label="영역 도구" />
+        <div className="flex items-center gap-3">
+          {step.zoom && (
+            <button type="button" onClick={() => onSetRect('zoom', undefined)} className="text-sm text-orange-600 underline">확대 해제</button>
+          )}
+          <EmphasisToggle on={emphasis} onChange={onToggleEmphasis} />
+        </div>
       </div>
+      <MarkTools
+        tool={tool}
+        onTool={setTool}
+        color={color}
+        onColor={setColor}
+        badgeNumber={badgeNumber}
+        onBadgeNumber={setBadge}
+        count={annotations.length}
+        onClearAll={() => setAnnotations(() => [])}
+      />
 
-      <RectCanvas
+      <SceneCanvas
         src={image?.url ?? null}
         masks={pendingMasks}
-        shapes={stepShapes(step)}
+        shapes={stepShapes(step, i => onUpdate(s => removeHotspot(s, i)))}
         tool={tool}
+        color={color}
+        badgeNumber={badgeNumber}
+        emphasis={emphasis}
+        annotations={annotations}
+        onAddAnnotation={a => {
+          setAnnotations(list => [...list, a]);
+          if (a.kind === 'badge') setBadge(Math.min(99, a.n + 1));
+        }}
+        onRemoveAnnotation={id => setAnnotations(list => list.filter(a => a.id !== id))}
         onDraw={onDraw}
         onRemoveMask={i => setPendingMasks(pendingMasks.filter((_, j) => j !== i))}
         emptyText={step.assetId
@@ -122,6 +169,8 @@ export function StepEditor({ manifest, step, index, image, onUpdate, onSetRect, 
           : '배경 이미지가 없습니다.'}
       />
       {tool === 'zoom' && <p className="text-xs text-gray-500 -mt-3">학생 화면에서 이 영역이 화면에 꽉 차게 확대됩니다. 작은 버튼이 많은 프로그램(유니티 등)에 쓰세요.</p>}
+      {tool === 'button' && <p className="text-xs text-gray-500 -mt-3">학생이 이 화면에서 눌러야 할 버튼을 순서대로 드래그해 추가하세요. 학생 화면에 마우스 표시와 1, 2, 3… 번호가 붙고, 순서대로 모두 눌러야 다음 단계로 넘어갑니다.</p>}
+      {step.type === 'click' && step.hotspots.length > 1 && <HotspotList step={step} onUpdate={onUpdate} />}
 
       {pendingMasks.length > 0 && (
         <div className="flex items-center justify-between bg-gray-50 border rounded px-3 py-2 text-sm">
@@ -135,6 +184,8 @@ export function StepEditor({ manifest, step, index, image, onUpdate, onSetRect, 
         </div>
       )}
 
+      <LinkField value={step.url} onChange={url => onUpdate(s => ({ ...s, url }))} />
+
       <div className="border-t pt-4 flex flex-col gap-3 text-sm">
         <TypePanel manifest={manifest} step={step} onUpdate={onUpdate} onSetRect={onSetRect} />
         {step.type !== 'choice' && kind !== 'end' && (
@@ -144,13 +195,43 @@ export function StepEditor({ manifest, step, index, image, onUpdate, onSetRect, 
             label="성공하면 이동할 단계"
             value={step.type === 'click' ? step.hotspots[0]?.nextStepId ?? '' : 'nextStepId' in step ? step.nextStepId : ''}
             onChange={nextStepId => onUpdate(s => {
-              if (s.type === 'click') return { ...s, hotspots: s.hotspots.map((h, i) => (i === 0 ? { ...h, nextStepId } : h)) };
+              if (s.type === 'click') return { ...s, hotspots: s.hotspots.map(h => ({ ...h, nextStepId })) };
               if (s.type === 'choice') return s;
               return { ...s, nextStepId };
             })}
           />
         )}
       </div>
+    </div>
+  );
+}
+
+const ACTIONS: { value: ClickAction; label: string }[] = [
+  { value: 'click', label: '클릭' }, { value: 'double', label: '더블클릭' }, { value: 'right', label: '오른쪽 클릭' },
+];
+
+// 한 화면의 여러 버튼: 순서·동작을 바꾸거나 지운다.
+function HotspotList({ step, onUpdate }: { step: Extract<Step, { type: 'click' }>; onUpdate: Update }) {
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-sm flex flex-col gap-2">
+      <p className="font-semibold text-blue-900">이 화면의 버튼 {step.hotspots.length}개 — 학생은 1번부터 순서대로 눌러야 합니다</p>
+      {step.hotspots.map((h, i) => (
+        <div key={h.id} className="flex flex-wrap items-center gap-2">
+          <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">{i + 1}</span>
+          <select
+            aria-label={`${i + 1}번 버튼 동작`}
+            value={h.action ?? 'click'}
+            onChange={e => { const a = e.target.value as ClickAction; onUpdate(s => setHotspotAction(s, i, a)); }}
+            className="border rounded px-2 py-1 bg-white"
+          >
+            {ACTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+          </select>
+          <button type="button" aria-label={`${i + 1}번 버튼 위로`} disabled={i === 0} onClick={() => onUpdate(s => moveHotspot(s, i, -1))} className="px-2 py-1 rounded border bg-white disabled:opacity-30">▲</button>
+          <button type="button" aria-label={`${i + 1}번 버튼 아래로`} disabled={i === step.hotspots.length - 1} onClick={() => onUpdate(s => moveHotspot(s, i, 1))} className="px-2 py-1 rounded border bg-white disabled:opacity-30">▼</button>
+          <button type="button" aria-label={`${i + 1}번 버튼 삭제`} onClick={() => onUpdate(s => removeHotspot(s, i))} className="px-2 py-1 rounded border border-red-200 text-red-600 bg-white">삭제</button>
+        </div>
+      ))}
+      <button type="button" onClick={() => onUpdate(s => updateHotspots(s, hs => hs.slice(0, 1)))} className="self-start text-xs text-gray-600 underline">버튼 하나만 남기기</button>
     </div>
   );
 }
@@ -172,7 +253,7 @@ function NextSelect({ manifest, self, label, value, onChange }: {
 }
 
 function TypePanel({ manifest, step, onUpdate, onSetRect }: {
-  manifest: Manifest; step: Step; onUpdate: (updater: (step: Step) => Step) => void; onSetRect: (role: RectRole, rect: Rect | undefined) => void;
+  manifest: Manifest; step: Step; onUpdate: Update; onSetRect: (role: RectRole, rect: Rect | undefined) => void;
 }) {
   switch (step.type) {
     case 'input': {
@@ -193,7 +274,7 @@ function TypePanel({ manifest, step, onUpdate, onSetRect }: {
                 <span className="font-semibold text-gray-800">정답 값 (한 줄에 하나, 비우면 아무 값이나 통과)</span>
                 <textarea
                   value={step.input.acceptedValues.join('\n')}
-                  onChange={e => { const values = e.target.value.split('\n'); onUpdate(s => (s.type === 'input' ? { ...s, input: { ...s.input, acceptedValues: values } } : s)); }}
+                  onChange={e => { const values = e.target.value.split('\n'); onUpdate(s => (s.type === 'input' ? { ...s, input: { ...s.input, acceptedValues: values } } : s), 'accepted'); }}
                   onBlur={() => onUpdate(s => (s.type === 'input' ? { ...s, input: { ...s.input, acceptedValues: s.input.acceptedValues.map(v => v.trim()).filter(Boolean) } } : s))}
                   className="border rounded p-2 h-16"
                   placeholder={'예: student01'}
@@ -204,7 +285,7 @@ function TypePanel({ manifest, step, onUpdate, onSetRect }: {
                 <input
                   type="text"
                   value={step.input.placeholder ?? ''}
-                  onChange={e => { const placeholder = e.target.value; onUpdate(s => (s.type === 'input' ? { ...s, input: { ...s.input, placeholder: placeholder || undefined } } : s)); }}
+                  onChange={e => { const placeholder = e.target.value; onUpdate(s => (s.type === 'input' ? { ...s, input: { ...s.input, placeholder: placeholder || undefined } } : s), 'placeholder'); }}
                   className="border rounded px-2 py-1"
                 />
               </label>
@@ -282,7 +363,7 @@ function TypePanel({ manifest, step, onUpdate, onSetRect }: {
   }
 }
 
-function KeyPanel({ step, onUpdate }: { step: Extract<Step, { type: 'key' }>; onUpdate: (updater: (step: Step) => Step) => void }) {
+function KeyPanel({ step, onUpdate }: { step: Extract<Step, { type: 'key' }>; onUpdate: Update }) {
   const [listening, setListening] = useState(false);
   const combo = step.keys[0] ?? '';
   const setCombo = (value: string) => onUpdate(s => (s.type === 'key' ? { ...s, keys: [value] } : s));

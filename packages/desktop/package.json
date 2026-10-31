@@ -1,6 +1,6 @@
 {
   "name": "@walksim/desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "실습 녹화기 — 데스크톱 녹화기 + 편집기 (Windows / macOS)",
   "author": "실습 녹화기",

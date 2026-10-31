@@ -3,7 +3,7 @@
 // 개인정보: 원본 화면은 메모리에서만 다루고 에디터 검수함으로만 전달한다. 디스크·네트워크로 보내지 않는다.
 import {
   app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, net, protocol, safeStorage, screen, session, shell, systemPreferences,
-  type Display,
+  WebContentsView, type Display,
 } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -495,6 +495,115 @@ async function stopRecording() {
   }
 }
 
+// ---------- 따라 하기(분할 화면) ----------
+// 왼쪽: 안내(지금 프로젝트의 학생 화면, 또는 학생용 실습 주소), 오른쪽: 실제 사이트(일반 브라우저처럼 동작).
+// 왼쪽 안내의 🔗 링크(window.open(url, 'walksim-real'))는 오른쪽에 연다.
+// 실제 사이트는 앱과 다른 세션(persist:walksim-real)에서 열어 앱의 저장소·권한과 섞이지 않게 한다.
+const PREVIEW_GUIDE = 'walksim://app/player/index.html?preview=1&host=desktop';
+const SPLIT_BAR = 48;
+const GUIDE_RATIO = 0.44;
+interface SplitView { win: BrowserWindow; guide: WebContentsView; real: WebContentsView }
+let split: SplitView | null = null;
+
+const isWebUrl = (url: string) => { try { const u = new URL(url); return u.protocol === 'https:' || u.protocol === 'http:'; } catch { return false; } };
+
+function guideAddress(lessonUrl: string | null): string {
+  if (!lessonUrl) return PREVIEW_GUIDE;
+  const u = new URL(lessonUrl);
+  u.searchParams.set('host', 'desktop');
+  return u.toString();
+}
+
+function sendSplitState() {
+  if (!split) return;
+  const wc = split.real.webContents;
+  const url = wc.getURL();
+  split.win.webContents.send('split:state', {
+    url: url.startsWith('data:') ? '' : url,
+    canBack: wc.navigationHistory.canGoBack(),
+    canForward: wc.navigationHistory.canGoForward(),
+    guideRatio: GUIDE_RATIO,
+  });
+}
+
+function openReal(url: string) {
+  if (!split || !isWebUrl(url)) return;
+  void split.real.webContents.loadURL(url).catch(() => {});
+}
+
+function openSplit(lessonUrl: string | null = null) {
+  if (split) {
+    void split.guide.webContents.loadURL(guideAddress(lessonUrl));
+    split.win.show();
+    split.win.focus();
+    return;
+  }
+  const win = new BrowserWindow({
+    width: 1500, height: 940, title: '실습 녹화기 — 따라 하기', backgroundColor: '#111827',
+    webPreferences: { preload: path.join(__dirname, 'preload-split.js'), contextIsolation: true, sandbox: true },
+  });
+  lockDown(win, pathToFileURL(UI_DIR).toString());
+  const guide = new WebContentsView({ webPreferences: { contextIsolation: true, sandbox: true } });
+  const realSession = session.fromPartition('persist:walksim-real');
+  realSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'fullscreen' || permission === 'clipboard-sanitized-write'));
+  const real = new WebContentsView({ webPreferences: { contextIsolation: true, sandbox: true, session: realSession } });
+  win.contentView.addChildView(guide);
+  win.contentView.addChildView(real);
+  split = { win, guide, real };
+
+  const layout = () => {
+    const { width, height } = win.getContentBounds();
+    const left = Math.round(width * GUIDE_RATIO);
+    guide.setBounds({ x: 0, y: SPLIT_BAR, width: left, height: height - SPLIT_BAR });
+    real.setBounds({ x: left + 4, y: SPLIT_BAR, width: width - left - 4, height: height - SPLIT_BAR });
+  };
+  layout();
+  win.on('resize', layout);
+
+  // 안내: 앱의 학생 화면이나 실습 주소 안에서만 이동하고, 그 밖의 웹 주소는 오른쪽에 연다.
+  guide.webContents.on('will-navigate', (e, url) => {
+    const current = guide.webContents.getURL();
+    const sameLesson = url.startsWith('walksim://app/player/') || (isWebUrl(current) && new URL(url).origin === new URL(current).origin);
+    if (sameLesson) return;
+    e.preventDefault();
+    openReal(url);
+  });
+  guide.webContents.setWindowOpenHandler(({ url }) => { openReal(url); return { action: 'deny' }; });
+  // 실제 사이트의 새 창(target=_blank)은 같은 칸에서 연다.
+  real.webContents.setWindowOpenHandler(({ url }) => { openReal(url); return { action: 'deny' }; });
+  for (const ev of ['did-navigate', 'did-navigate-in-page', 'did-finish-load'] as const) real.webContents.on(ev as 'did-navigate', sendSplitState);
+
+  win.on('closed', () => {
+    guide.webContents.close();
+    real.webContents.close();
+    split = null;
+  });
+  void win.loadFile(path.join(UI_DIR, 'split.html')).then(sendSplitState);
+  void guide.webContents.loadURL(guideAddress(lessonUrl));
+  void real.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
+    '<body style="font-family:system-ui,sans-serif;color:#6b7280;display:flex;align-items:center;justify-content:center;height:90vh;text-align:center">'
+    + '<p>왼쪽 안내의 <b>🔗 실제 사이트에서 열기</b>를 누르거나<br>위 주소 칸에 사이트 주소를 입력하세요.</p></body>',
+  ));
+}
+
+function registerSplitIpc() {
+  const fromBar = (e: Electron.IpcMainEvent) => !!split && e.sender === split.win.webContents;
+  ipcMain.handle('split:open', e => { if (e.sender === editorWin?.webContents) openSplit(null); });
+  ipcMain.on('split:go', (e, url: unknown) => { if (fromBar(e) && typeof url === 'string') openReal(url); });
+  ipcMain.on('split:back', e => { if (fromBar(e)) split!.real.webContents.navigationHistory.goBack(); });
+  ipcMain.on('split:forward', e => { if (fromBar(e)) split!.real.webContents.navigationHistory.goForward(); });
+  ipcMain.on('split:reload', e => { if (fromBar(e)) split!.real.webContents.reload(); });
+  ipcMain.on('split:external', e => {
+    const url = split?.real.webContents.getURL() ?? '';
+    if (fromBar(e) && isWebUrl(url)) void shell.openExternal(url);
+  });
+  ipcMain.on('split:guide', (e, url: unknown) => {
+    if (!fromBar(e)) return;
+    if (url === null) openSplit(null);
+    else if (typeof url === 'string' && url.startsWith('https://') && isWebUrl(url)) openSplit(url);
+  });
+}
+
 // ---------- IPC ----------
 function registerIpc() {
   ipcMain.on('editor:ready', e => {
@@ -518,6 +627,7 @@ function registerIpc() {
   ipcMain.handle('rec:stop', async e => { if (e.sender === editorWin?.webContents) await stopRecording(); });
   ipcMain.on('toolbar:pause', e => { if (rec && e.sender === rec.toolbar.webContents) togglePause(); });
   ipcMain.on('toolbar:stop', e => { if (rec && e.sender === rec.toolbar.webContents) void stopRecording(); });
+  registerSplitIpc();
 }
 
 // 화면 캡처 창만 화면 스트림을 쓸 수 있게 하고, 나머지 권한 요청은 거절한다.

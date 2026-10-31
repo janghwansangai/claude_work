@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Manifest, Rect } from '@walksim/shared';
+import type { Annotation, Manifest, Rect } from '@walksim/shared';
 import {
   appendStep,
   createInitialManifest,
   deleteStep as removeStep,
+  duplicateStep as cloneStepAfter,
   replaceStepAsset,
   newId,
   setStepRect as applyStepRect,
@@ -40,6 +41,9 @@ export interface ApprovedCapture {
   instruction: string;
   viewport: Viewport | null;
   placeholder?: string;
+  targets?: Rect[];
+  annotations?: Annotation[];
+  url?: string;
 }
 
 // 에디터의 Manifest/승인된 이미지 상태를 소유하고 IndexedDB와 동기화한다.
@@ -57,6 +61,9 @@ export function useProject() {
   const dirtyRef = useRef(false);
   const hydratedRef = useRef(false);
   const objectUrlsRef = useRef(new Set<string>());
+  const sizesRef = useRef(new Map<string, { width: number; height: number }>());
+  // DB에 들어 있는 이미지. 되돌리기로 예전 이미지를 다시 쓰게 되면 저장할 때 다시 넣는다.
+  const storedRef = useRef(new Set<string>());
 
   const setManifest = useCallback((next: Manifest) => {
     manifestRef.current = next;
@@ -73,6 +80,7 @@ export function useProject() {
     const url = URL.createObjectURL(blob);
     objectUrlsRef.current.add(url);
     blobsRef.current.set(assetId, blob);
+    sizesRef.current.set(assetId, { width, height });
     return { url, width, height };
   }, []);
 
@@ -80,12 +88,21 @@ export function useProject() {
     objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
     objectUrlsRef.current.clear();
     blobsRef.current.clear();
+    sizesRef.current.clear();
+    storedRef.current.clear();
   }, []);
 
   const persist = useCallback(async (newAssets: AssetRecord[] = []) => {
     dirtyRef.current = false;
+    const manifest = manifestRef.current;
+    const referenced = new Set(manifest.steps.map(s => s.assetId).filter(Boolean));
+    const given = new Set(newAssets.map(a => a.assetId));
+    const missing: AssetRecord[] = [...referenced]
+      .filter(id => !storedRef.current.has(id) && !given.has(id) && blobsRef.current.has(id))
+      .map(id => ({ projectId: manifest.id, assetId: id, blob: blobsRef.current.get(id)!, ...(sizesRef.current.get(id) ?? { width: 0, height: 0 }), createdAt: Date.now() }));
     try {
-      await saveProject(manifestRef.current, selectedRef.current, newAssets);
+      await saveProject(manifest, selectedRef.current, [...newAssets, ...missing]);
+      storedRef.current = new Set([...referenced].filter(id => storedRef.current.has(id) || given.has(id) || missing.some(m => m.assetId === id)));
       if (!dirtyRef.current) setSaveStatus('saved');
     } catch (err) {
       console.error('프로젝트 저장 실패:', err);
@@ -103,7 +120,10 @@ export function useProject() {
   const applyRecord = useCallback((record: ProjectRecord, assets: AssetRecord[]) => {
     revokeAllObjectUrls();
     const restored: Record<string, StoredImage> = {};
-    for (const a of assets) restored[a.assetId] = registerImage(a.assetId, a.blob, a.width, a.height);
+    for (const a of assets) {
+      restored[a.assetId] = registerImage(a.assetId, a.blob, a.width, a.height);
+      storedRef.current.add(a.assetId);
+    }
     setManifest(record.manifest);
     setSelectedStepId(
       record.manifest.steps.some(s => s.id === record.selectedStepId)
@@ -195,6 +215,9 @@ export function useProject() {
       instruction: capture.instruction,
       viewport: capture.viewport,
       placeholder: capture.placeholder,
+      targets: capture.targets,
+      annotations: capture.annotations,
+      url: capture.url,
     });
     setManifest(next);
     setSelectedStepId(step.id);
@@ -215,6 +238,21 @@ export function useProject() {
   const setStepRect = useCallback((stepId: string, role: RectRole, rect: Rect | undefined) => {
     setManifest(applyStepRect(manifestRef.current, stepId, role, rect));
   }, [setManifest]);
+
+  // 되돌리기·다시 실행: 예전 Manifest로 바꾼다. 이미지 원본(마스킹 완료)은 메모리에 있으므로 저장할 때 다시 넣는다.
+  const restoreManifest = useCallback((next: Manifest) => {
+    if (next.id !== manifestRef.current.id) return;
+    setManifest(next);
+    if (!next.steps.some(s => s.id === selectedRef.current)) setSelectedStepId(next.steps[next.steps.length - 1]?.id ?? null);
+  }, [setManifest, setSelectedStepId]);
+
+  const duplicateStep = useCallback((stepId: string) => {
+    const result = cloneStepAfter(manifestRef.current, stepId);
+    if (!result) return null;
+    setManifest(result.manifest);
+    setSelectedStepId(result.copyId);
+    return result.copyId;
+  }, [setManifest, setSelectedStepId]);
 
   const deleteStep = useCallback(async (stepId: string) => {
     const steps = manifestRef.current.steps;
@@ -288,6 +326,8 @@ export function useProject() {
     addApprovedCapture,
     addMasksToStep,
     setStepRect,
+    restoreManifest,
+    duplicateStep,
     deleteStep,
     newProject,
     openProject,

@@ -1,4 +1,4 @@
-import { mapNextStepIds, nextStepIds, normalizeKeyCombo, stepAnchor, type Manifest, type Rect, type Step } from '@walksim/shared';
+import { isLinkUrl, mapNextStepIds, nextStepIds, normalizeKeyCombo, stepAnchor, type Annotation, type ClickAction, type Manifest, type Rect, type Step } from '@walksim/shared';
 
 export type { Rect };
 
@@ -32,6 +32,7 @@ export interface CapturePayload {
   action: RecordedAction | null; // null이면 녹화 종료 화면(또는 구버전 레코더의 클릭)
   source: 'browser' | 'desktop';
   timestamp: number;
+  pageUrl?: string; // 녹화한 웹페이지 주소(출처+경로만, 검색어·# 제외). 분할 화면 링크 초안으로 쓴다.
 }
 
 export function newId(prefix: string): string {
@@ -85,7 +86,17 @@ export function parseCapturePayload(value: unknown): CapturePayload | null {
     ? p.suggestedMasks.map(parseRect).filter((r): r is Rect => r !== null).slice(0, 100)
     : [];
 
-  return { image: p.image, rect: parseRect(p.rect), viewport, target, suggestedMasks, action: parseAction(p.action), source: p.source === 'desktop' ? 'desktop' : 'browser', timestamp: p.timestamp };
+  return {
+    image: p.image, rect: parseRect(p.rect), viewport, target, suggestedMasks, action: parseAction(p.action),
+    source: p.source === 'desktop' ? 'desktop' : 'browser', timestamp: p.timestamp, pageUrl: cleanPageUrl(p.pageUrl),
+  };
+}
+
+/** 녹화한 페이지 주소에서 출처와 경로만 남긴다. 검색어(?)·조각(#)에는 토큰·개인정보가 들어 있을 수 있다. */
+export function cleanPageUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 4096 || !isLinkUrl(value)) return undefined;
+  const url = new URL(value);
+  return `${url.origin}${url.pathname}`.slice(0, 2048);
 }
 
 const ACTION_KINDS = new Set(['click', 'double', 'right', 'drag', 'type', 'key', 'scroll']);
@@ -138,11 +149,18 @@ export interface NewStepInput {
   instruction: string;
   viewport: Viewport | null;
   placeholder?: string;
+  targets?: Rect[];          // 같은 화면에서 순서대로 누를 추가 버튼
+  annotations?: Annotation[];
+  url?: string;
 }
 
 // 기록된 동작을 단계로 바꾼다. 다음 단계 연결은 비워 두고 appendStep이 이어 준다.
 function stepFromCapture(input: NewStepInput): Step {
-  const base = { id: newId('step'), assetId: input.assetId, instruction: input.instruction };
+  const base = {
+    id: newId('step'), assetId: input.assetId, instruction: input.instruction,
+    ...(input.annotations?.length ? { annotations: input.annotations } : {}),
+    ...(input.url ? { url: input.url } : {}),
+  };
   const { action, rect } = input;
   if (action?.kind === 'key' && action.keys) return { ...base, type: 'key', keys: [action.keys], nextStepId: '' };
   if (action?.kind === 'type' && !rect) {
@@ -161,12 +179,34 @@ function stepFromCapture(input: NewStepInput): Step {
         storeInput: false,
       },
     };
-    case 'double':
-    case 'right':
-      return { ...base, type: 'click', hotspots: [{ id: newId('hotspot'), rect, nextStepId: '', action: action.kind }] };
-    default:
-      return { ...base, type: 'click', hotspots: [{ id: newId('hotspot'), rect, nextStepId: '' }] };
+    default: {
+      const kind: ClickAction = action?.kind === 'double' || action?.kind === 'right' ? action.kind : 'click';
+      const hotspots = [rect, ...(input.targets ?? [])].map(r => ({ id: newId('hotspot'), rect: r, nextStepId: '', ...(kind === 'click' ? {} : { action: kind }) }));
+      return { ...base, type: 'click', hotspots };
+    }
   }
+}
+
+// 단계를 복제해 바로 뒤에 넣는다. 원래 단계 → 복제본 → 원래 다음 단계 순서로 이어진다.
+export function duplicateStep(manifest: Manifest, stepId: string): { manifest: Manifest; copyId: string } | null {
+  const index = manifest.steps.findIndex(s => s.id === stepId);
+  const original = manifest.steps[index];
+  if (!original) return null;
+  const copyId = newId('step');
+  const copy = cloneStep(original, copyId);
+  const linkable = original.type !== 'choice' && nextStepIds(original).length > 0;
+  const rewired = linkable ? mapNextStepIds(original, () => copyId) : original;
+  const steps = [...manifest.steps];
+  steps.splice(index, 1, rewired, copy);
+  return { manifest: { ...manifest, steps }, copyId };
+}
+
+function cloneStep(step: Step, id: string): Step {
+  const copy = structuredClone(step);
+  copy.id = id;
+  if (copy.type === 'click') copy.hotspots = copy.hotspots.map(h => ({ ...h, id: newId('hotspot') }));
+  if (copy.annotations) copy.annotations = copy.annotations.map(a => ({ ...a, id: newId('a') }));
+  return copy;
 }
 
 // 새 단계를 끝에 추가하고, 직전 단계의 연결되지 않은 동작을 새 단계로 연결한다.
@@ -200,7 +240,7 @@ export function deleteStep(manifest: Manifest, stepId: string): Manifest {
   return { ...manifest, startStepId, steps, assets };
 }
 
-export type RectRole = 'primary' | 'target' | 'zoom';
+export type RectRole = 'primary' | 'target' | 'zoom' | 'addHotspot';
 
 // 단계의 영역을 바꾼다. primary: 클릭 영역/끌 대상/입력칸/스크롤 영역, target: 드래그 놓을 곳, zoom: 확대 영역
 export function setStepRect(manifest: Manifest, stepId: string, role: RectRole, rect: Rect | undefined): Manifest {
@@ -209,6 +249,12 @@ export function setStepRect(manifest: Manifest, stepId: string, role: RectRole, 
   if (!step) return manifest;
   let next: Step = step;
   if (role === 'zoom') next = { ...step, zoom: rect };
+  else if (role === 'addHotspot' && rect) {
+    if (step.type !== 'click') return manifest;
+    const last = step.hotspots[step.hotspots.length - 1];
+    const nextStepId = last?.nextStepId ?? manifest.steps[index + 1]?.id ?? '';
+    next = { ...step, hotspots: [...step.hotspots, { id: newId('hotspot'), rect, nextStepId, ...(last?.action ? { action: last.action } : {}) }] };
+  }
   else if (role === 'target' && step.type === 'drag' && rect) next = { ...step, to: rect };
   else if (role === 'primary') {
     switch (step.type) {
@@ -244,16 +290,19 @@ export function stepKind(step: Step): StepKind {
 
 // 단계의 종류를 바꾼다. id·이미지·지시문·힌트·확대와 대표 영역·다음 연결은 최대한 유지한다.
 export function convertStep(step: Step, kind: StepKind, fallbackNext: string): Step {
-  const { id, assetId, instruction, hint, zoom } = step;
-  const base = { id, assetId, instruction, hint, zoom };
+  const { id, assetId, instruction, hint, zoom, annotations, url } = step;
+  const base = { id, assetId, instruction, hint, zoom, annotations, url };
   const rect: Rect = stepAnchor(step) ?? [0.4, 0.4, 0.2, 0.1];
   const next = nextStepIds(step).find(Boolean) ?? fallbackNext;
   switch (kind) {
     case 'click':
     case 'double':
     case 'right': {
-      const h = step.type === 'click' ? step.hotspots[0] : undefined;
-      return { ...base, type: 'click', hotspots: [{ id: h?.id ?? newId('hotspot'), rect, nextStepId: h?.nextStepId || next, ...(kind === 'click' ? {} : { action: kind }) }] };
+      const action = kind === 'click' ? {} : { action: kind };
+      if (step.type === 'click' && step.hotspots.length > 0) {
+        return { ...base, type: 'click', hotspots: step.hotspots.map(({ action: _old, ...h }) => ({ ...h, nextStepId: h.nextStepId || next, ...action })) };
+      }
+      return { ...base, type: 'click', hotspots: [{ id: newId('hotspot'), rect, nextStepId: next, ...action }] };
     }
     case 'end': return { ...base, type: 'click', hotspots: [] };
     case 'drag': {
@@ -281,3 +330,29 @@ export function replaceStepAsset(manifest: Manifest, stepId: string, assetId: st
   if (old && old !== assetId && !steps.some(s => s.assetId === old)) delete assets[old];
   return { ...manifest, steps, assets };
 }
+
+// ---------- 한 화면의 여러 버튼(순서대로 누르기) ----------
+type ClickStep = Extract<Step, { type: 'click' }>;
+
+export function updateHotspots(step: Step, fn: (hotspots: ClickStep['hotspots']) => ClickStep['hotspots']): Step {
+  if (step.type !== 'click') return step;
+  const hotspots = fn(step.hotspots);
+  // 순서 누르기는 마지막 버튼의 연결로 넘어가므로 모든 버튼의 연결을 같게 맞춘다.
+  const next = step.hotspots.map(h => h.nextStepId).find(Boolean) ?? '';
+  return { ...step, hotspots: hotspots.map(h => ({ ...h, nextStepId: h.nextStepId || next })) };
+}
+
+export const removeHotspot = (step: Step, index: number) => updateHotspots(step, hs => hs.filter((_, i) => i !== index));
+export const moveHotspot = (step: Step, index: number, dir: -1 | 1) => updateHotspots(step, hs => {
+  const j = index + dir;
+  if (j < 0 || j >= hs.length) return hs;
+  const copy = [...hs];
+  [copy[index], copy[j]] = [copy[j], copy[index]];
+  return copy;
+});
+export const setHotspotAction = (step: Step, index: number, action: ClickAction) => updateHotspots(step, hs => hs.map((h, i) => {
+  if (i !== index) return h;
+  const { action: _old, ...rest } = h;
+  return action === 'click' ? rest : { ...rest, action };
+}));
+export const setHotspotRect = (step: Step, index: number, rect: Rect) => updateHotspots(step, hs => hs.map((h, i) => (i === index ? { ...h, rect } : h)));
